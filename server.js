@@ -1,115 +1,183 @@
 const express = require('express');
 const http = require('http');
+const { Server } = require('socket.io');
 const path = require('path');
-const socketIO = require('socket.io');
 
-// Initialize express app and server
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = new Server(server);
 
-// Set static folder
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Rooms storage
+// Store active rooms and their participants
 const rooms = {};
 
-// Socket.io connection handler
+// Socket.IO connection handler
 io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
+  console.log('User connected:', socket.id);
   
-  // Handle user joining a room
-  socket.on('join', (data) => {
-    const { room, userName, isCreator } = data;
-    console.log(`User ${userName} joining room ${room}`);
+  // Create room
+  socket.on('create-room', ({ roomId, userName }) => {
+    // Store user info with socket id
+    socket.userData = { userName, roomId };
     
-    // Join the socket.io room
-    socket.join(room);
-    
-    // Keep track of rooms and users
-    if (!rooms[room]) {
-      rooms[room] = { users: {} };
+    // Create room if it doesn't exist
+    if (!rooms[roomId]) {
+      rooms[roomId] = { users: {} };
     }
     
     // Add user to room
-    rooms[room].users[socket.id] = { userName, isCreator };
+    rooms[roomId].users[socket.id] = { userName };
     
-    // Notify others in room
-    socket.to(room).emit('user-joined', { 
-      id: socket.id,
-      userName,
-      isCreator
+    // Join socket to room
+    socket.join(roomId);
+    
+    // Inform user the room was created/joined
+    socket.emit('room-joined', { 
+      roomId, 
+      users: Object.values(rooms[roomId].users).map(u => u.userName)
     });
     
-    // Log room status
-    console.log(`Room ${room} now has ${Object.keys(rooms[room].users).length} users`);
+    // Inform other users in the room about the new user
+    socket.to(roomId).emit('user-joined', { 
+      userName, 
+      userId: socket.id 
+    });
+    
+    console.log(`User ${userName} created/joined room: ${roomId}`);
   });
-  
-  // Handle WebRTC signaling
-  socket.on('offer', (data) => {
-    socket.to(data.room).emit('offer', {
-      offer: data.offer,
-      room: data.room
+
+  // Handle user joining existing room
+  socket.on('join-room', ({ roomId, userName }) => {
+    // Check if room exists
+    if (!rooms[roomId]) {
+      socket.emit('error', { message: 'Room does not exist' });
+      return;
+    }
+    
+    // Store user info
+    socket.userData = { userName, roomId };
+    
+    // Add user to room
+    rooms[roomId].users[socket.id] = { userName };
+    
+    // Join socket to room
+    socket.join(roomId);
+    
+    // Inform user they joined the room
+    socket.emit('room-joined', { 
+      roomId, 
+      users: Object.values(rooms[roomId].users).map(u => u.userName)
+    });
+    
+    // Inform other users in the room about the new user
+    socket.to(roomId).emit('user-joined', { 
+      userName, 
+      userId: socket.id 
+    });
+    
+    console.log(`User ${userName} joined room: ${roomId}`);
+  });
+
+  // Handle messages
+  socket.on('send-message', ({ message }) => {
+    const { roomId, userName } = socket.userData;
+    
+    if (roomId && rooms[roomId]) {
+      // Broadcast message to all users in the room
+      io.to(roomId).emit('new-message', {
+        userId: socket.id,
+        userName,
+        message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // WebRTC signaling: Handle offers
+  socket.on('offer', ({ roomId, sdp, to }) => {
+    console.log(`Forwarding offer from ${socket.id} to ${to}`);
+    io.to(to).emit('offer', {
+      from: socket.id,
+      sdp
     });
   });
-  
-  socket.on('answer', (data) => {
-    socket.to(data.room).emit('answer', {
-      answer: data.answer,
-      room: data.room
+
+  // WebRTC signaling: Handle answers
+  socket.on('answer', ({ roomId, sdp, to }) => {
+    console.log(`Forwarding answer from ${socket.id} to ${to}`);
+    io.to(to).emit('answer', {
+      from: socket.id,
+      sdp
     });
   });
-  
-  socket.on('ice-candidate', (data) => {
-    socket.to(data.room).emit('ice-candidate', {
-      candidate: data.candidate,
-      room: data.room
+
+  // WebRTC signaling: Handle ICE candidates
+  socket.on('ice-candidate', ({ roomId, candidate, to }) => {
+    console.log(`Forwarding ICE candidate from ${socket.id} to ${to}`);
+    io.to(to).emit('ice-candidate', {
+      from: socket.id,
+      candidate
     });
   });
-  
-  // Handle user leaving a room
-  socket.on('leave-room', (data) => {
-    handleDisconnect(socket, data.room);
-  });
-  
-  // Handle socket disconnection
+
+  // Handle user disconnection
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+    console.log('User disconnected:', socket.id);
     
-    // Find which rooms this socket was in
-    for (const roomId in rooms) {
-      if (rooms[roomId].users && rooms[roomId].users[socket.id]) {
-        handleDisconnect(socket, roomId);
+    // Check if user was in a room
+    const { roomId, userName } = socket.userData || {};
+    
+    if (roomId && rooms[roomId]) {
+      // Remove user from room
+      delete rooms[roomId].users[socket.id];
+      
+      // Inform other users about disconnection
+      socket.to(roomId).emit('user-left', { userId: socket.id, userName });
+      
+      // If room is empty, remove it
+      if (Object.keys(rooms[roomId].users).length === 0) {
+        delete rooms[roomId];
+        console.log(`Room ${roomId} was deleted (empty)`);
       }
     }
   });
-  
-  // Helper function to handle disconnection
-  function handleDisconnect(socket, room) {
-    if (rooms[room] && rooms[room].users && rooms[room].users[socket.id]) {
-      console.log(`User ${socket.id} leaving room ${room}`);
-      
+
+  // Handle explicit room leaving
+  socket.on('leave-room', () => {
+    const { roomId, userName } = socket.userData || {};
+    
+    if (roomId && rooms[roomId]) {
       // Remove user from room
-      delete rooms[room].users[socket.id];
+      delete rooms[roomId].users[socket.id];
       
-      // Notify others
-      socket.to(room).emit('user-disconnected', { id: socket.id });
+      // Leave socket room
+      socket.leave(roomId);
       
-      // Leave the socket.io room
-      socket.leave(room);
+      // Inform other users
+      socket.to(roomId).emit('user-left', { userId: socket.id, userName });
       
-      // Clean up empty rooms
-      if (Object.keys(rooms[room].users).length === 0) {
-        console.log(`Room ${room} is now empty, cleaning up`);
-        delete rooms[room];
-      } else {
-        console.log(`Room ${room} now has ${Object.keys(rooms[room].users).length} users`);
+      // Reset user data
+      socket.userData = {};
+      
+      // If room is empty, remove it
+      if (Object.keys(rooms[roomId].users).length === 0) {
+        delete rooms[roomId];
+        console.log(`Room ${roomId} was deleted (empty)`);
       }
+      
+      socket.emit('room-left');
     }
-  }
+  });
 });
 
-// Set up server port
+// Define routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Start the server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
