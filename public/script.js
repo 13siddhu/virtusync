@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // Connect to Socket.IO server
 const socket = io();
 
@@ -595,3 +596,99 @@ async function createPeerConnection(userId, isInitiator) {
 }
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
+=======
+const socket = io();
+const localVideo = document.getElementById('localVideo');
+const remoteVideo = document.getElementById('remoteVideo');
+let peerConnection;
+
+
+// STUN server for ICE candidates
+const config = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' }
+  ],
+};
+
+
+// Start Call
+async function startCall() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = stream;
+
+    peerConnection = new RTCPeerConnection(config);
+    stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('ice-candidate', event.candidate);
+      }
+    };
+
+    peerConnection.ontrack = (event) => {
+      remoteVideo.srcObject = event.streams[0];
+    };
+
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    socket.emit('offer', offer);
+  } catch (error) {
+    console.error('Error starting call:', error);
+  }
+}
+
+
+// End Call
+function endCall() {
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+
+
+  // Stop local video
+  if (localVideo.srcObject) {
+    localVideo.srcObject.getTracks().forEach(track => track.stop());
+    localVideo.srcObject = null;
+  }
+
+
+  // Stop remote video
+  if (remoteVideo.srcObject) {
+    remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+    remoteVideo.srcObject = null;
+  }
+
+
+  // Notify the other user
+  socket.emit('end-call');
+  alert('Call Ended');
+}
+
+
+// Socket Events
+socket.on('offer', async (offer) => {
+  if (!peerConnection) startCall();
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+  socket.emit('answer', answer);
+});
+
+socket.on('answer', async (answer) => {
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+});
+
+socket.on('ice-candidate', async (candidate) => {
+  await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+});
+
+
+// Handle End Call from Peer
+socket.on('end-call', () => {
+  endCall();
+  alert('Call Ended by Peer');
+});
+>>>>>>> 26cb161 (Initial commit)

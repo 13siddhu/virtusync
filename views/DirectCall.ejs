@@ -1,0 +1,120 @@
+<%- include('partials/header.ejs') %>
+
+<!-- Call Interface -->
+<div id="call-interface" class="hidden">
+    <div class="call-header">
+      <div class="room-info">
+        <span class="room-label">Room ID:</span>
+        <span id="current-room-id"></span>
+        <button id="copy-room-id" class="btn btn-secondary">
+          <i class="fas fa-copy"></i>
+        </button>
+      </div>
+      <div class="participants-info">
+        <span class="participants-label">Participants:</span>
+        <span id="participants-count">0</span>
+      </div>
+    </div>
+    <div class="call-timer">00:00:00</div>
+    
+    <div class="videos-container" id="videos-container">
+      <!-- Local video is always present -->
+      <div class="video-wrapper local-video-wrapper">
+        <video id="local" autoplay playsinline muted></video>
+        <div class="video-label">You</div>
+        <div class="connection-status">Connected</div>
+      </div>
+      
+      <!-- Remote videos will be added dynamically -->
+    </div>
+    
+    <div class="controls">
+      <button id="toggle-audio" class="control-btn">
+        <i class="fas fa-microphone"></i>
+      </button>
+      <button id="toggle-video" class="control-btn">
+        <i class="fas fa-video"></i>
+      </button>
+      <button id="share-screen" class="control-btn">
+        <i class="fas fa-desktop"></i>
+      </button>
+      <button id="chat-btn" class="control-btn">
+        <i class="fas fa-comment-alt"></i>
+      </button>
+      <button id="end-call" class="control-btn end-call">
+        <i class="fas fa-phone-slash"></i>
+      </button>
+    </div>
+  </div>
+  
+  <!-- Chat Panel -->
+  <div id="chat-panel" class="hidden">
+    <div class="chat-header">
+      <h3>Group Chat</h3>
+      <button id="close-chat" class="close-btn">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    
+    <div class="chat-messages" id="chat-messages">
+      <!-- Messages will be added dynamically -->
+    </div>
+    
+    <div class="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Type a message...">
+      <button id="send-message" class="btn btn-primary">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Room Modal -->
+<div id="create-room-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title">Create a New Call</h2>
+      <button class="close-modal">&times;</button>
+    </div>
+    
+    <div class="form-group">
+      <label for="user-name" class="form-label">Your Name</label>
+      <input type="text" id="user-name" class="form-control" placeholder="Enter your name">
+    </div>
+    
+    <div class="form-group">
+      <label for="create-room-id" class="form-label">Room ID</label>
+      <div class="room-id-group">
+        <input type="text" id="create-room-id" class="form-control" placeholder="Enter room ID or generate one">
+        <button id="generate-room-id" class="btn btn-secondary">Generate</button>
+      </div>
+    </div>
+    
+    <button id="start-call-btn" class="btn btn-primary">Start Call</button>
+  </div>
+</div>
+
+<!-- Join Room Modal -->
+<div id="join-room-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title">Join a Call</h2>
+      <button class="close-modal">&times;</button>
+    </div>
+    
+    <div class="form-group">
+      <label for="join-user-name" class="form-label">Your Name</label>
+      <input type="text" id="join-user-name" class="form-control" placeholder="Enter your name">
+    </div>
+    
+    <div class="form-group">
+      <label for="join-room-id" class="form-label">Room ID</label>
+      <input type="text" id="join-room-id" class="form-control" placeholder="Enter room ID provided by the creator">
+    </div>
+    
+    <button id="join-existing-call-btn" class="btn btn-primary">Join Call</button>
+  </div>
+</div>
+
+
+<%- include('partials/footer.ejs') %> %>

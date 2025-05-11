@@ -1,0 +1,352 @@
+/* Modern animated login page styling */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary-color: #00a8ff;
+  --primary-light: #61dafb;
+  --secondary-color: #6c5ce7;
+  --text-color: #2d3436;
+  --bg-color: #f9fafb;
+  --input-bg: #ffffff;
+  --shadow-color: rgba(0, 168, 255, 0.2);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Poppins', sans-serif;
+}
+
+body {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Background animated bubbles */
+body::before {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='30' cy='30' r='20' fill='%2300a8ff' opacity='0.05'/%3E%3Ccircle cx='70' cy='70' r='15' fill='%236c5ce7' opacity='0.05'/%3E%3Ccircle cx='50' cy='50' r='25' fill='%2361dafb' opacity='0.03'/%3E%3C/svg%3E");
+  z-index: -1;
+  animation: bubbleMove 15s infinite linear;
+}
+
+@keyframes bubbleMove {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 100px 100px;
+  }
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  margin-bottom: 30px;
+  transform: translateY(-20px);
+  animation: logoAppear 1s ease-out forwards;
+}
+
+@keyframes logoAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(-50px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.logo svg {
+  margin-right: 15px;
+  animation: pulse 2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.logo h1 {
+  color: var(--primary-color);
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 24px;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.login {
+  background-color: var(--bg-color);
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: 0 15px 30px var(--shadow-color);
+  width: 350px;
+  text-align: center;
+  animation: fadeIn 0.8s ease-in-out forwards;
+  position: relative;
+  overflow: hidden;
+}
+
+.login::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transform: rotate(45deg);
+  animation: shineEffect 3s infinite;
+}
+
+@keyframes shineEffect {
+  0% {
+    left: -50%;
+    top: -50%;
+  }
+  100% {
+    left: 100%;
+    top: 100%;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login h1 {
+  color: var(--text-color);
+  margin-bottom: 25px;
+  font-size: 22px;
+  font-weight: 600;
+  position: relative;
+  display: inline-block;
+}
+
+.login h1::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 3px;
+  bottom: -8px;
+  left: 0;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+  border-radius: 10px;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.5s ease-out;
+  animation: underlineExpand 1s ease-out 0.5s forwards;
+}
+
+@keyframes underlineExpand {
+  to {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 30px;
+}
+
+.login input {
+  padding: 15px 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background-color: var(--input-bg);
+  font-size: 16px;
+  transition: all 0.3s ease;
+  outline: none;
+  animation: slideInLeft 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+.login input:nth-child(1) {
+  animation-delay: 0.2s;
+}
+
+.login input:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+.login input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 4px var(--shadow-color);
+  transform: translateY(-3px);
+}
+
+.login input::placeholder {
+  color: #9e9e9e;
+  transition: all 0.3s ease;
+}
+
+.login input:focus::placeholder {
+  opacity: 0.5;
+  transform: translateX(5px);
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.login button {
+  margin-top: 10px;
+  padding: 15px;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: fadeIn 0.5s ease-out 0.6s forwards;
+  opacity: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.login button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: all 0.5s ease;
+}
+
+.login button:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 7px 15px var(--shadow-color);
+}
+
+.login button:hover::before {
+  left: 100%;
+  transition: 0.5s;
+}
+
+.login p {
+  margin-top: 25px;
+  color: #666;
+  font-size: 14px;
+  animation: fadeIn 0.5s ease-out 0.8s forwards;
+  opacity: 0;
+}
+
+.login a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.login a::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  bottom: -2px;
+  left: 0;
+  background-color: var(--primary-color);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s ease;
+}
+
+.login a:hover {
+  color: var(--secondary-color);
+}
+
+.login a:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* For the SVG logo animation */
+circle {
+  animation: colorPulse 4s infinite alternate;
+}
+
+@keyframes colorPulse {
+  0% {
+    fill: var(--primary-color);
+    opacity: 0.7;
+  }
+  50% {
+    fill: var(--secondary-color);
+    opacity: 0.8;
+  }
+  100% {
+    fill: var(--primary-light);
+    opacity: 0.7;
+  }
+}
+
+path {
+  animation: arrowPulse 2s infinite ease-in-out;
+}
+
+@keyframes arrowPulse {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .login {
+    width: 90%;
+    padding: 30px 20px;
+  }
+  
+  .logo h1 {
+    font-size: 20px;
+  }
+}

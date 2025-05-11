@@ -1,0 +1,105 @@
+// Create background lines and circles
+document.addEventListener('DOMContentLoaded', function() {
+    const backgroundLines = document.getElementById('background-lines');
+    const footerLines = document.getElementById('footer-lines');
+    
+    // Create lines for main background
+    for (let i = 0; i < 20; i++) {
+        const line = document.createElement('div');
+        line.className = 'line';
+        line.style.top = `${Math.random() * 100}%`;
+        line.style.left = '0';
+        line.style.width = '100%';
+        line.style.opacity = Math.random() * 0.5;
+        backgroundLines.appendChild(line);
+    }
+    
+    // Create vertical lines for main background
+    for (let i = 0; i < 20; i++) {
+        const line = document.createElement('div');
+        line.className = 'line';
+        line.style.top = '0';
+        line.style.left = `${Math.random() * 100}%`;
+        line.style.width = '1px';
+        line.style.height = '100%';
+        line.style.opacity = Math.random() * 0.5;
+        backgroundLines.appendChild(line);
+    }
+    
+    // Create circles for main background
+    for (let i = 0; i < 15; i++) {
+        const circle = document.createElement('div');
+        circle.className = 'circle';
+        circle.style.top = `${Math.random() * 100}%`;
+        circle.style.left = `${Math.random() * 100}%`;
+        circle.style.width = `${Math.random() * 50 + 10}px`;
+        circle.style.height = circle.style.width;
+        circle.style.opacity = Math.random() * 0.3;
+        backgroundLines.appendChild(circle);
+    }
+    
+    // Create lines for footer
+    for (let i = 0; i < 10; i++) {
+        const line = document.createElement('div');
+        line.className = 'line';
+        line.style.top = `${Math.random() * 100}%`;
+        line.style.left = '0';
+        line.style.width = '100%';
+        line.style.opacity = Math.random() * 0.3;
+        footerLines.appendChild(line);
+    }
+    
+    // Create circles for footer
+    for (let i = 0; i < 8; i++) {
+        const circle = document.createElement('div');
+        circle.className = 'circle';
+        circle.style.top = `${Math.random() * 100}%`;
+        circle.style.left = `${Math.random() * 100}%`;
+        circle.style.width = `${Math.random() * 30 + 5}px`;
+        circle.style.height = circle.style.width;
+        circle.style.opacity = Math.random() * 0.2;
+        footerLines.appendChild(circle);
+    }
+    
+    // Animation for glow effects
+    const buttons = document.querySelectorAll('.cta-button, .get-started-button');
+    buttons.forEach(button => {
+        button.addEventListener('mouseover', function() {
+            this.style.transform = 'scale(1.05)';
+            this.style.boxShadow = '0 0 20px rgba(0, 168, 255, 0.9)';
+        });
+        
+        button.addEventListener('mouseout', function() {
+            this.style.transform = 'scale(1)';
+            this.style.boxShadow = '';
+        });
+    });
+    
+    // Animation for social icons
+    const socialIcons = document.querySelectorAll('.social-icon');
+    socialIcons.forEach(icon => {
+        icon.addEventListener('mouseover', function() {
+            this.style.transform = 'translateY(-5px)';
+            this.style.background = '#00a8ff';
+        });
+        
+        icon.addEventListener('mouseout', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.background = 'rgba(255, 255, 255, 0.1)';
+        });
+    });
+    
+    // Animation for footer links
+    const footerLinks = document.querySelectorAll('.footer-links a');
+    footerLinks.forEach(link => {
+        link.addEventListener('mouseover', function() {
+            this.style.transform = 'translateX(5px)';
+            this.style.color = '#00a8ff';
+        });
+        
+        link.addEventListener('mouseout', function() {
+            this.style.transform = 'translateX(0)';
+            this.style.color = 'rgba(255, 255, 255, 0.7)';
+        });
+    });
+});
