@@ -1,9 +1,12 @@
 // db.js
 import pkg from 'pg';
-const { Pool } = pkg;
+import env from "dotenv";
 
-const pool = new Pool({
-  user: 'postgres',
+const { Pool } = pkg;
+env.config();
+
+const pool = new pg.client({
+  user: process.env.PG,
   host: 'localhost',
   database: 'authentication',
   password: '2@Siddhu',
