@@ -38,6 +38,12 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Middleware to pass user data to EJS templates
+app.use(function(req, res, next) {
+  res.locals.isAuthenticated = req.isAuthenticated();
+  res.locals.user = req.user;
+  next();
+});
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -87,6 +93,15 @@ app.get("/DirectCall", (req, res) => {
   res.render("DirectCall.ejs");
 });
 
+app.get("/profile", (req, res) => {
+  if (req.isAuthenticated()) {
+    // Pass the user data from req.user to the EJS template
+    res.render("profile.ejs", { user: req.user });
+  } else {
+    res.redirect("/login");
+  }
+});
+
 app.get("/start", (req, res) => {
   res.render("start.ejs");
 });
@@ -104,7 +119,7 @@ app.get("/logout", (req, res) => {
 
 app.post("/login",
   passport.authenticate("local", {
-    successRedirect: "/start.ejs",               // need to find the after login page
+    successRedirect: "/profile",               // need to find the after login page
     failureRedirect:"/login",
   })
 );
@@ -134,7 +149,7 @@ app.post("/register",async(req,res)=>{
           const user = result.rows[0];
           req.login(user,(err)=>{
             console.log("Success");
-            //res.redirect("/login");
+            res.redirect("/profile");
           });
         }
       });
