@@ -1,61 +1,487 @@
-<%- include("partials/headerafterlogin.ejs") %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Calling & Chat</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="/css/profile.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar for Contacts -->
+        <div class="sidebar">
+            <div class="header">
+                <span class="logo"><i class="fa-solid fa-blender-phone"></i></span>
+                <h1>VirtuSync</h1>
+            </div>
+            <div class="search-container">
+                <i class="fa-solid fa-search"></i>
+                <input type="text" id="search-input" placeholder="Search contacts...">
+            </div>
+            <div class="contact-list" id="contact-list">
+                <!-- Contact items will be dynamically added here -->
+            </div>
+            <!-- Logout button -->
+            <a href="/logout" class="logout-button">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                Logout
+            </a>
+        </div>
 
-<style>
-    /* Basic styling for the dropdown menu */
-    .dropdown {
-        position: relative;
-        display: inline-block;
-    }
+        <!-- Main Chat Area -->
+        <div class="main-chat-area">
+            <div id="no-chat-selected" class="no-chat-selected">
+                Select a contact to start chatting.
+            </div>
 
-    .dropdown-content {
-        display: none;
-        position: absolute;
-        right: 0;
-        background-color: #f9f9f9;
-        min-width: 160px;
-        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-        z-index: 1;
-        border-radius: 8px;
-    }
-
-    .dropdown-content a {
-        color: black;
-        padding: 12px 16px;
-        text-decoration: none;
-        display: block;
-    }
-
-    .dropdown-content a:hover {
-        background-color: #f1f1f1;
-        border-radius: 8px;
-    }
-
-    .dropdown:hover .dropdown-content {
-        display: block;
-    }
-
-    .btn-dropdown {
-      background-color: #007bff;
-      color: white;
-      padding: 10px 20px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
-</style>
-
-<div class="container mt-5">
-    <h1>User Profile</h1>
-    <p>Welcome, <%= user.email %>!</p>
-
-    <div class="dropdown">
-      <button class="btn btn-primary btn-dropdown">User Actions</button>
-      <div class="dropdown-content">
-        <a href="/DirectCall">Start a Direct Call</a>
-        <a href="/logout">Logout</a>
-      </div>
+            <div id="chat-window" style="display: none; height: 100%; display: flex; flex-direction: column;">
+                <div class="chat-header">
+                    <div class="contact-info-container" style="display:flex; align-items: center;">
+                      <div class="contact-avatar" id="chat-header-avatar"></div>
+                      <div class="contact-info">
+                          <h4 id="chat-header-name"></h4>
+                          <p id="chat-header-status"></p>
+                      </div>
+                    </div>
+                    <div class="call-buttons">
+                        <i id="audio-call-btn" class="fa-solid fa-phone"></i>
+                        <i id="video-call-btn" class="fa-solid fa-video"></i>
+                    </div>
+                </div>
+                <div class="chat-messages" id="messages-container">
+                    <!-- Incoming Call Pop-up -->
+                    <div id="call-popup" class="call-popup">
+                        <h3 id="caller-name-display">Incoming Call...</h3>
+                        <p>from <span id="caller-id-display"></span></p>
+                        <div class="call-popup-buttons">
+                            <button id="accept-call-btn" class="accept"><i class="fa-solid fa-phone"></i></button>
+                            <button id="decline-call-btn" class="decline"><i class="fa-solid fa-phone-slash"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div id="video-container" style="display: none;">
+                        <video id="remoteVideo" autoplay playsinline></video>
+                        <video id="localVideo" autoplay playsinline muted></video>
+                        <div id="call-timer" class="call-timer">00:00</div>
+                        <div class="call-controls" style="display: flex; gap: 20px; margin-top: 20px;">
+                            <button id="toggle-audio-btn"><i class="fa-solid fa-microphone-slash"></i></button>
+                            <button id="toggle-video-btn"><i class="fa-solid fa-video-slash"></i></button>
+                            <button id="end-call-btn" style="background-color: #dc3545;"><i class="fa-solid fa-phone-slash"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <i class="fa-solid fa-plus icon"></i>
+                    <i class="fa-solid fa-image icon"></i>
+                    <i class="fa-solid fa-microphone icon"></i>
+                    <input type="text" id="message-input" placeholder="Message..." required>
+                    <button id="send-button"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
 
-<%- include("partials/footer.ejs") %>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // EJS variable for current user ID
+        const currentUserId = "<%- currentUser.id %>";
+        let recipientId = null;
+        let allUsers = [];
+        let activeUsersList = [];
+        
+        // Connect to Socket.IO and send the user ID
+        const socket = io({
+            query: { userId: currentUserId }
+        });
+        
+        // --- DOM Elements ---
+        const messagesContainer = document.getElementById('messages-container');
+        const contactList = document.getElementById('contact-list');
+        const chatWindow = document.getElementById('chat-window');
+        const noChatSelected = document.getElementById('no-chat-selected');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const chatHeaderName = document.getElementById('chat-header-name');
+        const chatHeaderAvatar = document.getElementById('chat-header-avatar');
+        const chatHeaderStatus = document.getElementById('chat-header-status');
+        const audioCallBtn = document.getElementById('audio-call-btn');
+        const videoCallBtn = document.getElementById('video-call-btn');
+        const videoContainer = document.getElementById('video-container');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const toggleAudioBtn = document.getElementById('toggle-audio-btn');
+        const toggleVideoBtn = document.getElementById('toggle-video-btn');
+        const endCallBtn = document.getElementById('end-call-btn');
+        
+        // Call Pop-up DOM Elements
+        const callPopup = document.getElementById('call-popup');
+        const callerIdDisplay = document.getElementById('caller-id-display');
+        const acceptCallBtn = document.getElementById('accept-call-btn');
+        const declineCallBtn = document.getElementById('decline-call-btn');
+        const callTimerDisplay = document.getElementById('call-timer');
+        let callStartTime;
+        let callTimerInterval;
+
+        // --- WebRTC Global State ---
+        let localStream;
+        let peerConnection;
+        let isAudioMuted = false;
+        let isVideoMuted = false;
+        
+        // WebRTC configuration with STUN servers
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+            ]
+        };
+
+        // --- User Interface Functions ---
+        const displayContact = (contact) => {
+            const contactDiv = document.createElement('div');
+            contactDiv.classList.add('contact');
+            contactDiv.setAttribute('data-id', contact.id);
+
+            const avatarDiv = document.createElement('div');
+            avatarDiv.classList.add('contact-avatar');
+            avatarDiv.textContent = contact.email.substring(0, 2).toUpperCase();
+            
+            const statusDot = document.createElement('div');
+            statusDot.classList.add('status-dot');
+            const status = activeUsersList.includes(String(contact.id)) ? 'online' : 'offline';
+            statusDot.classList.add(status);
+            avatarDiv.appendChild(statusDot);
+
+            const infoDiv = document.createElement('div');
+            infoDiv.classList.add('contact-info');
+            infoDiv.innerHTML = `<h4>${contact.email}</h4><p>${status}</p>`;
+
+            contactDiv.appendChild(avatarDiv);
+            contactDiv.appendChild(infoDiv);
+
+            contactDiv.addEventListener('click', () => {
+                // Remove active class from all contacts and set on the selected one
+                document.querySelectorAll('.contact').forEach(c => c.classList.remove('active'));
+                contactDiv.classList.add('active');
+
+                // Update chat window and load history
+                recipientId = contact.id;
+                chatHeaderName.textContent = contact.email;
+                chatHeaderAvatar.textContent = contact.email.substring(0, 2).toUpperCase();
+                chatHeaderStatus.textContent = activeUsersList.includes(String(contact.id)) ? 'online' : 'offline';
+                
+                noChatSelected.style.display = 'none';
+                chatWindow.style.display = 'flex';
+                loadChatHistory(recipientId);
+            });
+
+            contactList.appendChild(contactDiv);
+        };
+        
+        const loadUsers = async () => {
+            contactList.innerHTML = '';
+            try {
+                const response = await fetch('/api/users');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch users.');
+                }
+                allUsers = await response.json();
+                allUsers.forEach(user => {
+                    if (user.id != currentUserId) {
+                        displayContact(user);
+                    }
+                });
+            } catch (err) {
+                console.error('Error loading users:', err);
+            }
+        };
+
+        const updateContactList = () => {
+            contactList.innerHTML = '';
+            allUsers.forEach(user => {
+                if (user.id != currentUserId) {
+                    displayContact(user);
+                }
+            });
+        };
+
+        loadUsers();
+
+        const displayMessage = (data) => {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+
+            if (data.fromUserId == currentUserId) {
+                messageElement.classList.add('my-message');
+            } else {
+                messageElement.classList.add('other-message');
+            }
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('message-content');
+            contentDiv.textContent = data.message;
+            messageElement.appendChild(contentDiv);
+            
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        };
+
+        const loadChatHistory = async (id) => {
+            messagesContainer.innerHTML = '';
+            try {
+                const response = await fetch(`/api/chat-history?recipientId=${id}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch chat history.');
+                }
+                const messages = await response.json();
+                messages.forEach(msg => {
+                    displayMessage({
+                        fromUserId: msg.sender_id,
+                        message: msg.message_text
+                    });
+                });
+            } catch (err) {
+                console.error(err);
+                const statusElement = document.createElement('div');
+                statusElement.classList.add('status-message');
+                statusElement.textContent = 'Failed to load chat history.';
+                messagesContainer.appendChild(statusElement);
+            }
+        };
+        
+        const sendMessage = () => {
+            const message = messageInput.value.trim();
+
+            if (recipientId && message) {
+                socket.emit('private-message', { recipientId, message });
+                messageInput.value = '';
+            }
+        }
+
+        // --- Socket.IO Event Handlers ---
+        socket.on('connect', () => {
+            console.log("Connected to server, sending user ID.");
+        });
+
+        socket.on('active-users', (users) => {
+            activeUsersList = users;
+            console.log("Active users updated:", activeUsersList);
+            updateContactList();
+        });
+
+        socket.on('chat-message', (data) => {
+            // Only display the message if it's for the currently active conversation
+            if (data.fromUserId == recipientId || data.fromUserId == currentUserId) {
+                 displayMessage({
+                    fromUserId: data.fromUserId,
+                    message: data.message
+                });
+            }
+        });
+
+        socket.on('status', (message) => {
+            const statusElement = document.createElement('div');
+            statusElement.classList.add('status-message');
+            statusElement.textContent = message;
+            messagesContainer.appendChild(statusElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        });
+
+        // --- WEBRTC LOGIC FOR VIDEO/AUDIO CALLS ---
+        
+        const initializePeerConnection = () => {
+            peerConnection = new RTCPeerConnection(configuration);
+            
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice-candidate', {
+                        recipientId: recipientId,
+                        candidate: event.candidate,
+                    });
+                }
+            };
+            
+            peerConnection.ontrack = (event) => {
+                remoteVideo.srcObject = event.streams[0];
+            };
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
+        };
+        
+        const startCall = async (video = true) => {
+            if (!recipientId) {
+                return alert('Please select a contact to call.');
+            }
+            
+            // Get local media stream
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: video,
+                    audio: true
+                });
+                localVideo.srcObject = localStream;
+                videoContainer.style.display = 'flex';
+                
+                initializePeerConnection();
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+                socket.emit('offer', {
+                    recipientId: recipientId,
+                    offer: peerConnection.localDescription,
+                    isAudioOnly: !video
+                });
+                
+                console.log('Call started, offer sent.');
+            } catch (err) {
+                console.error('Error accessing media devices.', err);
+                alert('Could not access your camera or microphone. Please check permissions.');
+            }
+        };
+
+        socket.on('offer', async (data) => {
+            // Store the caller's ID and show the pop-up
+            recipientId = data.fromUserId;
+            callerIdDisplay.textContent = recipientId;
+            callPopup.style.display = 'flex';
+            
+            // Set up event listeners for accept/decline
+            acceptCallBtn.onclick = async () => {
+                callPopup.style.display = 'none';
+                
+                // Switch chat window to the caller
+                const contactDiv = document.querySelector(`.contact[data-id='${recipientId}']`);
+                if (contactDiv) {
+                    document.querySelectorAll('.contact').forEach(c => c.classList.remove('active'));
+                    contactDiv.classList.add('active');
+                    noChatSelected.style.display = 'none';
+                    chatWindow.style.display = 'flex';
+                }
+
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: true
+                    });
+                    localVideo.srcObject = localStream;
+                    videoContainer.style.display = 'flex';
+                    
+                    initializePeerConnection();
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    
+                    socket.emit('answer', {
+                        recipientId: data.fromUserId,
+                        answer: peerConnection.localDescription,
+                    });
+                    
+                    startCallTimer();
+                    console.log('Call answered, answer sent.');
+                } catch (err) {
+                    console.error('Error handling offer.', err);
+                }
+            };
+
+            declineCallBtn.onclick = () => {
+                callPopup.style.display = 'none';
+                socket.emit('end-call', { recipientId: data.fromUserId });
+            };
+        });
+        
+        socket.on('answer', async (data) => {
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                startCallTimer();
+                console.log('Answer received, connection established.');
+            } catch (err) {
+                console.error('Error handling answer.', err);
+            }
+        });
+        
+        socket.on('ice-candidate', async (data) => {
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                console.log('ICE candidate added.');
+            } catch (err) {
+                console.error('Error adding ICE candidate.', err);
+            }
+        });
+        
+        const endCall = () => {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            localVideo.srcObject = null;
+            remoteVideo.srcObject = null;
+            videoContainer.style.display = 'none';
+            stopCallTimer();
+            if (recipientId) {
+                socket.emit('end-call', { recipientId });
+            }
+        };
+        
+        // Call timer functions
+        const startCallTimer = () => {
+            callStartTime = Date.now();
+            callTimerInterval = setInterval(updateCallTimer, 1000);
+            callTimerDisplay.style.display = 'block';
+        };
+
+        const updateCallTimer = () => {
+            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            callTimerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        };
+
+        const stopCallTimer = () => {
+            clearInterval(callTimerInterval);
+            callTimerDisplay.style.display = 'none';
+            callTimerDisplay.textContent = '00:00';
+        };
+
+        const toggleAudio = () => {
+            isAudioMuted = !isAudioMuted;
+            localStream.getAudioTracks()[0].enabled = !isAudioMuted;
+            toggleAudioBtn.innerHTML = isAudioMuted ? '<i class="fa-solid fa-microphone"></i>' : '<i class="fa-solid fa-microphone-slash"></i>';
+        };
+
+        const toggleVideo = () => {
+            isVideoMuted = !isVideoMuted;
+            localStream.getVideoTracks()[0].enabled = !isVideoMuted;
+            toggleVideoBtn.innerHTML = isVideoMuted ? '<i class="fa-solid fa-video"></i>' : '<i class="fa-solid fa-video-slash"></i>';
+        };
+
+        audioCallBtn.addEventListener('click', () => startCall(false));
+        videoCallBtn.addEventListener('click', () => startCall(true));
+        endCallBtn.addEventListener('click', endCall);
+        toggleAudioBtn.addEventListener('click', toggleAudio);
+        toggleVideoBtn.addEventListener('click', toggleVideo);
+
+        socket.on('end-call', () => {
+            endCall();
+            alert('Call ended by the other user.');
+        });
+        
+        // --- Event Listeners for Chat ---
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

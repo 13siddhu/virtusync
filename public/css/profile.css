@@ -1,0 +1,329 @@
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #17171e;
+            color: #d1d1d1;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            flex-grow: 1;
+        }
+        .sidebar {
+            width: 300px;
+            background-color: #1f1f27;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #32323e;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header .logo {
+            font-size: 2rem;
+            margin-right: 10px;
+            color: #8a2be2;
+        }
+        .search-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        .search-container input {
+            width: 100%;
+            padding: 10px 10px 10px 40px;
+            background-color: #2b2b3a;
+            border: none;
+            border-radius: 20px;
+            color: #d1d1d1;
+            outline: none;
+        }
+        .search-container .fa-search {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+        .contact-list {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        .contact {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: background-color 0.2s ease;
+        }
+        .contact:hover {
+            background-color: #32323e;
+        }
+        .contact.active {
+            background-color: #32323e;
+        }
+        .contact-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background-color: #8a2be2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 20px;
+            margin-right: 15px;
+            position: relative;
+        }
+        .status-dot {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid #1f1f27;
+        }
+        .status-dot.online {
+            background-color: #28a745;
+        }
+        .status-dot.offline {
+            background-color: #6c757d;
+        }
+        .contact-info {
+            flex-grow: 1;
+        }
+        .contact-info h4 {
+            margin: 0;
+            font-size: 16px;
+            color: #fff;
+        }
+        .contact-info p {
+            margin: 0;
+            font-size: 12px;
+            color: #999;
+        }
+        .main-chat-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background-color: #1f1f27;
+            border-bottom: 1px solid #32323e;
+            justify-content: space-between;
+        }
+        .chat-header h4 {
+            margin: 0;
+            font-size: 18px;
+            color: #fff;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            position: relative;
+        }
+        .message {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .my-message {
+            justify-content: flex-end;
+        }
+        .other-message {
+            justify-content: flex-start;
+        }
+        .message-content {
+            max-width: 60%;
+            padding: 12px 18px;
+            border-radius: 20px;
+            position: relative;
+            color: white;
+        }
+        .my-message .message-content {
+            background-color: #8a2be2;
+            text-align: right;
+            border-bottom-right-radius: 5px;
+        }
+        .other-message .message-content {
+            background-color: #2b2b3a;
+            border-bottom-left-radius: 5px;
+        }
+        .chat-input-area {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #1f1f27;
+            border-top: 1px solid #32323e;
+        }
+        .chat-input-area .icon {
+            font-size: 20px;
+            color: #d1d1d1;
+            cursor: pointer;
+            margin-right: 15px;
+            transition: color 0.2s ease;
+        }
+        .chat-input-area .icon:hover {
+            color: #8a2be2;
+        }
+        .chat-input-area input {
+            flex-grow: 1;
+            padding: 12px;
+            background-color: #2b2b3a;
+            border: none;
+            border-radius: 20px;
+            color: #d1d1d1;
+            outline: none;
+        }
+        .chat-input-area button {
+            background-color: #8a2be2;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            font-size: 18px;
+            cursor: pointer;
+            margin-left: 15px;
+        }
+        .no-chat-selected {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: #6c757d;
+            flex-grow: 1;
+        }
+        .logout-button {
+            margin-top: auto;
+            padding: 15px;
+            color: #d1d1d1;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            border-radius: 10px;
+            transition: background-color 0.2s ease;
+        }
+        .logout-button:hover {
+            background-color: #32323e;
+        }
+        .logout-button i {
+            margin-right: 15px;
+        }
+        /* New styles for video call */
+        .call-buttons {
+            display: flex;
+            gap: 15px;
+        }
+        .call-buttons i {
+            font-size: 20px;
+            color: #d1d1d1;
+            cursor: pointer;
+        }
+        .call-buttons i:hover {
+            color: #fff;
+        }
+        #localVideo, #remoteVideo {
+            width: 100%;
+            height: 100%;
+            background: #000;
+            border-radius: 8px;
+        }
+        #video-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 10;
+        }
+        #localVideo {
+            width: 200px;
+            height: 150px;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 11;
+            object-fit: cover;
+        }
+        
+        /* Styles for the incoming call pop-up */
+        .call-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2b2b3a;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .call-popup h3 {
+            margin: 0 0 15px 0;
+            font-size: 24px;
+            color: #fff;
+        }
+        .call-popup-buttons {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .call-popup-buttons button {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+        }
+        .call-popup-buttons button:hover {
+            transform: scale(1.1);
+        }
+        .call-popup-buttons .accept {
+            background-color: #28a745;
+            color: white;
+        }
+        .call-popup-buttons .decline {
+            background-color: #dc3545;
+            color: white;
+        }
+        .call-popup-buttons i {
+            font-size: 20px;
+        }
+
+        /* Call timer display */
+        .call-timer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 1.2rem;
+        }

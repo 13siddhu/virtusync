@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // Connect to Socket.IO server
 const socket = io();
 
@@ -596,7 +595,6 @@ async function createPeerConnection(userId, isInitiator) {
 }
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
-=======
 const socket = io();
 const localVideo = document.getElementById('localVideo');
 const remoteVideo = document.getElementById('remoteVideo');
@@ -691,4 +689,3 @@ socket.on('end-call', () => {
   endCall();
   alert('Call Ended by Peer');
 });
->>>>>>> 26cb161 (Initial commit)
