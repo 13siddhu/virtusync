@@ -35,7 +35,6 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Middleware to pass user data to EJS templates
 app.use(function(req, res, next) {
   res.locals.isAuthenticated = req.isAuthenticated();
   res.locals.user = req.user;
@@ -45,7 +44,6 @@ app.use(function(req, res, next) {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Database connection establishment
 const db = new pg.Client({
   user: process.env.PG_USER,
   host: process.env.PG_HOST,
@@ -55,17 +53,11 @@ const db = new pg.Client({
 });
 db.connect();
 
-// -----------------------------------------------------------------------------
-// SOCKET.IO LOGIC FOR ONE-ON-ONE CHAT AND VIDEO CALLS
-// -----------------------------------------------------------------------------
-
-// This map stores a user's ID and their current socket ID for private communication
 const activeUsers = new Map();
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
   
-  // Register the user with their authenticated ID from the EJS template
   const userId = socket.handshake.query.userId;
   if (userId) {
     activeUsers.set(String(userId), socket.id);
@@ -73,7 +65,6 @@ io.on('connection', (socket) => {
     io.emit('active-users', Array.from(activeUsers.keys()));
   }
 
-  // Handle private messages
   socket.on('private-message', async (data) => {
     const { recipientId, message } = data;
     const senderId = socket.handshake.query.userId;
@@ -85,14 +76,12 @@ io.on('connection', (socket) => {
     }
 
     try {
-      // Save the message to the database
       const result = await db.query(
         "INSERT INTO messages (sender_id, recipient_id, message_text) VALUES ($1, $2, $3) RETURNING *",
         [senderId, recipientId, message]
       );
       const savedMessage = result.rows[0];
 
-      // Send the message to the recipient if they are online
       if (recipientSocketId) {
         io.to(recipientSocketId).emit('chat-message', {
           id: savedMessage.id,
@@ -101,7 +90,6 @@ io.on('connection', (socket) => {
           timestamp: savedMessage.timestamp,
         });
       }
-      // Send the message back to the sender
       io.to(socket.id).emit('chat-message', {
         id: savedMessage.id,
         fromUserId: senderId,
@@ -119,7 +107,19 @@ io.on('connection', (socket) => {
   // ONE-ON-ONE WEBRTC SIGNALING
   // -----------------------------------------------------------------------------
 
-  // Handle call offers
+  // This is the new signaling for calls
+  socket.on('call-offer', (data) => {
+    const recipientSocketId = activeUsers.get(String(data.recipientId));
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('call-offer', {
+        fromUserId: socket.handshake.query.userId,
+        link: data.link
+      });
+    } else {
+      io.to(socket.id).emit('status', `User ${data.recipientId} is offline.`);
+    }
+  });
+
   socket.on('offer', (data) => {
     const recipientSocketId = activeUsers.get(String(data.recipientId));
     if (recipientSocketId) {
@@ -132,7 +132,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle call answers
   socket.on('answer', (data) => {
     const recipientSocketId = activeUsers.get(String(data.recipientId));
     if (recipientSocketId) {
@@ -143,7 +142,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle ICE candidates
   socket.on('ice-candidate', (data) => {
     const recipientSocketId = activeUsers.get(String(data.recipientId));
     if (recipientSocketId) {
@@ -154,7 +152,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle end call
   socket.on('end-call', (data) => {
     const recipientSocketId = activeUsers.get(String(data.recipientId));
     if (recipientSocketId) {
@@ -162,7 +159,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle user disconnection
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     for (let [id, sId] of activeUsers.entries()) {
@@ -176,10 +172,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// ROUTES
-// -----------------------------------------------------------------------------
-
 app.get("/", (req, res) => {
   res.render("index.ejs");
 });
@@ -192,7 +184,6 @@ app.get("/register", (req, res) => {
   res.render("register.ejs");
 });
 
-// Fetches a list of all users from the database for the contact list
 app.get("/api/users", async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).send("Unauthorized");
@@ -206,7 +197,6 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
-// Fetches chat history between two users
 app.get("/api/chat-history", async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).send("Unauthorized");
@@ -230,6 +220,16 @@ app.get("/api/chat-history", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
+// New route for the dedicated video call page
+app.get("/start-call/:recipientId", (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect("/login");
+  }
+  const recipientId = req.params.recipientId;
+  res.render("start.ejs", { currentUser: req.user, recipientId: recipientId });
+});
+
 
 app.get("/profile", (req, res) => {
   if (req.isAuthenticated()) {
@@ -321,7 +321,6 @@ passport.deserializeUser((user, cb) => {
   cb(null, user);
 });
 
-// Start the server
 server.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });

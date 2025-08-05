@@ -22,7 +22,6 @@
             <div class="contact-list" id="contact-list">
                 <!-- Contact items will be dynamically added here -->
             </div>
-            <!-- Logout button -->
             <a href="/logout" class="logout-button">
                 <i class="fa-solid fa-right-from-bracket"></i>
                 Logout
@@ -50,26 +49,7 @@
                     </div>
                 </div>
                 <div class="chat-messages" id="messages-container">
-                    <!-- Incoming Call Pop-up -->
-                    <div id="call-popup" class="call-popup">
-                        <h3 id="caller-name-display">Incoming Call...</h3>
-                        <p>from <span id="caller-id-display"></span></p>
-                        <div class="call-popup-buttons">
-                            <button id="accept-call-btn" class="accept"><i class="fa-solid fa-phone"></i></button>
-                            <button id="decline-call-btn" class="decline"><i class="fa-solid fa-phone-slash"></i></button>
-                        </div>
-                    </div>
-                    
-                    <div id="video-container" style="display: none;">
-                        <video id="remoteVideo" autoplay playsinline></video>
-                        <video id="localVideo" autoplay playsinline muted></video>
-                        <div id="call-timer" class="call-timer">00:00</div>
-                        <div class="call-controls" style="display: flex; gap: 20px; margin-top: 20px;">
-                            <button id="toggle-audio-btn"><i class="fa-solid fa-microphone-slash"></i></button>
-                            <button id="toggle-video-btn"><i class="fa-solid fa-video-slash"></i></button>
-                            <button id="end-call-btn" style="background-color: #dc3545;"><i class="fa-solid fa-phone-slash"></i></button>
-                        </div>
-                    </div>
+                    <!-- Chat messages will be appended here -->
                 </div>
                 <div class="chat-input-area">
                     <i class="fa-solid fa-plus icon"></i>
@@ -84,18 +64,15 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        // EJS variable for current user ID
         const currentUserId = "<%- currentUser.id %>";
         let recipientId = null;
         let allUsers = [];
         let activeUsersList = [];
         
-        // Connect to Socket.IO and send the user ID
         const socket = io({
             query: { userId: currentUserId }
         });
         
-        // --- DOM Elements ---
         const messagesContainer = document.getElementById('messages-container');
         const contactList = document.getElementById('contact-list');
         const chatWindow = document.getElementById('chat-window');
@@ -107,37 +84,7 @@
         const chatHeaderStatus = document.getElementById('chat-header-status');
         const audioCallBtn = document.getElementById('audio-call-btn');
         const videoCallBtn = document.getElementById('video-call-btn');
-        const videoContainer = document.getElementById('video-container');
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
-        const toggleAudioBtn = document.getElementById('toggle-audio-btn');
-        const toggleVideoBtn = document.getElementById('toggle-video-btn');
-        const endCallBtn = document.getElementById('end-call-btn');
         
-        // Call Pop-up DOM Elements
-        const callPopup = document.getElementById('call-popup');
-        const callerIdDisplay = document.getElementById('caller-id-display');
-        const acceptCallBtn = document.getElementById('accept-call-btn');
-        const declineCallBtn = document.getElementById('decline-call-btn');
-        const callTimerDisplay = document.getElementById('call-timer');
-        let callStartTime;
-        let callTimerInterval;
-
-        // --- WebRTC Global State ---
-        let localStream;
-        let peerConnection;
-        let isAudioMuted = false;
-        let isVideoMuted = false;
-        
-        // WebRTC configuration with STUN servers
-        const configuration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-            ]
-        };
-
-        // --- User Interface Functions ---
         const displayContact = (contact) => {
             const contactDiv = document.createElement('div');
             contactDiv.classList.add('contact');
@@ -161,11 +108,9 @@
             contactDiv.appendChild(infoDiv);
 
             contactDiv.addEventListener('click', () => {
-                // Remove active class from all contacts and set on the selected one
                 document.querySelectorAll('.contact').forEach(c => c.classList.remove('active'));
                 contactDiv.classList.add('active');
 
-                // Update chat window and load history
                 recipientId = contact.id;
                 chatHeaderName.textContent = contact.email;
                 chatHeaderAvatar.textContent = contact.email.substring(0, 2).toUpperCase();
@@ -208,7 +153,7 @@
 
         loadUsers();
 
-        const displayMessage = (data) => {
+        const displayMessage = (data, isCallLink = false) => {
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
 
@@ -218,10 +163,16 @@
                 messageElement.classList.add('other-message');
             }
             
-            const contentDiv = document.createElement('div');
-            contentDiv.classList.add('message-content');
-            contentDiv.textContent = data.message;
-            messageElement.appendChild(contentDiv);
+            if (isCallLink) {
+                messageElement.innerHTML = `<div class="message-content call-link-message">
+                    <a href="${data.message}" target="_blank">Start Call</a>
+                </div>`;
+            } else {
+                const contentDiv = document.createElement('div');
+                contentDiv.classList.add('message-content');
+                contentDiv.textContent = data.message;
+                messageElement.appendChild(contentDiv);
+            }
             
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -236,10 +187,11 @@
                 }
                 const messages = await response.json();
                 messages.forEach(msg => {
+                    const isCallLink = msg.message_text.startsWith('/start-call/');
                     displayMessage({
                         fromUserId: msg.sender_id,
                         message: msg.message_text
-                    });
+                    }, isCallLink);
                 });
             } catch (err) {
                 console.error(err);
@@ -258,6 +210,23 @@
                 messageInput.value = '';
             }
         }
+        
+        const sendCallLink = (audioOnly = false) => {
+            if (!recipientId) {
+                alert('Please select a contact to call.');
+                return;
+            }
+            
+            // Create a unique room ID for this call
+            const uniqueCallId = `${currentUserId}-${recipientId}-${Date.now()}`;
+            const link = `/start-call/${recipientId}?callerId=${currentUserId}&callId=${uniqueCallId}&audioOnly=${audioOnly}`;
+            
+            // Send a chat message with the link
+            socket.emit('private-message', { recipientId, message: link });
+            
+            // Open the call page in a new window for the caller
+            window.open(link, '_blank');
+        };
 
         // --- Socket.IO Event Handlers ---
         socket.on('connect', () => {
@@ -271,12 +240,10 @@
         });
 
         socket.on('chat-message', (data) => {
-            // Only display the message if it's for the currently active conversation
             if (data.fromUserId == recipientId || data.fromUserId == currentUserId) {
-                 displayMessage({
-                    fromUserId: data.fromUserId,
-                    message: data.message
-                });
+                // Check if the message is a call link
+                const isCallLink = data.message.startsWith('/start-call/');
+                displayMessage(data, isCallLink);
             }
         });
 
@@ -288,193 +255,9 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         });
 
-        // --- WEBRTC LOGIC FOR VIDEO/AUDIO CALLS ---
+        audioCallBtn.addEventListener('click', () => sendCallLink(true));
+        videoCallBtn.addEventListener('click', () => sendCallLink(false));
         
-        const initializePeerConnection = () => {
-            peerConnection = new RTCPeerConnection(configuration);
-            
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    socket.emit('ice-candidate', {
-                        recipientId: recipientId,
-                        candidate: event.candidate,
-                    });
-                }
-            };
-            
-            peerConnection.ontrack = (event) => {
-                remoteVideo.srcObject = event.streams[0];
-            };
-            
-            if (localStream) {
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
-            }
-        };
-        
-        const startCall = async (video = true) => {
-            if (!recipientId) {
-                return alert('Please select a contact to call.');
-            }
-            
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: video,
-                    audio: true
-                });
-                localVideo.srcObject = localStream;
-                videoContainer.style.display = 'flex';
-                
-                initializePeerConnection();
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                
-                socket.emit('offer', {
-                    recipientId: recipientId,
-                    offer: peerConnection.localDescription,
-                    isAudioOnly: !video
-                });
-                
-                console.log('Call started, offer sent.');
-            } catch (err) {
-                console.error('Error accessing media devices.', err);
-                alert('Could not access your camera or microphone. Please check permissions.');
-            }
-        };
-
-        socket.on('offer', async (data) => {
-            // Store the caller's ID and show the pop-up
-            recipientId = data.fromUserId;
-            callerIdDisplay.textContent = recipientId;
-            callPopup.style.display = 'flex';
-            
-            // Set up event listeners for accept/decline
-            acceptCallBtn.onclick = async () => {
-                callPopup.style.display = 'none';
-                
-                // Switch chat window to the caller
-                const contactDiv = document.querySelector(`.contact[data-id='${recipientId}']`);
-                if (contactDiv) {
-                    document.querySelectorAll('.contact').forEach(c => c.classList.remove('active'));
-                    contactDiv.classList.add('active');
-                    noChatSelected.style.display = 'none';
-                    chatWindow.style.display = 'flex';
-                }
-
-                try {
-                    localStream = await navigator.mediaDevices.getUserMedia({
-                        video: true,
-                        audio: true
-                    });
-                    localVideo.srcObject = localStream;
-                    videoContainer.style.display = 'flex';
-                    
-                    initializePeerConnection();
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-                    
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-                    
-                    socket.emit('answer', {
-                        recipientId: data.fromUserId,
-                        answer: peerConnection.localDescription,
-                    });
-                    
-                    startCallTimer();
-                    console.log('Call answered, answer sent.');
-                } catch (err) {
-                    console.error('Error handling offer.', err);
-                }
-            };
-
-            declineCallBtn.onclick = () => {
-                callPopup.style.display = 'none';
-                socket.emit('end-call', { recipientId: data.fromUserId });
-            };
-        });
-        
-        socket.on('answer', async (data) => {
-            try {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                startCallTimer();
-                console.log('Answer received, connection established.');
-            } catch (err) {
-                console.error('Error handling answer.', err);
-            }
-        });
-        
-        socket.on('ice-candidate', async (data) => {
-            try {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                console.log('ICE candidate added.');
-            } catch (err) {
-                console.error('Error adding ICE candidate.', err);
-            }
-        });
-        
-        const endCall = () => {
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-                localStream = null;
-            }
-            localVideo.srcObject = null;
-            remoteVideo.srcObject = null;
-            videoContainer.style.display = 'none';
-            stopCallTimer();
-            if (recipientId) {
-                socket.emit('end-call', { recipientId });
-            }
-        };
-        
-        // Call timer functions
-        const startCallTimer = () => {
-            callStartTime = Date.now();
-            callTimerInterval = setInterval(updateCallTimer, 1000);
-            callTimerDisplay.style.display = 'block';
-        };
-
-        const updateCallTimer = () => {
-            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
-            callTimerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-        };
-
-        const stopCallTimer = () => {
-            clearInterval(callTimerInterval);
-            callTimerDisplay.style.display = 'none';
-            callTimerDisplay.textContent = '00:00';
-        };
-
-        const toggleAudio = () => {
-            isAudioMuted = !isAudioMuted;
-            localStream.getAudioTracks()[0].enabled = !isAudioMuted;
-            toggleAudioBtn.innerHTML = isAudioMuted ? '<i class="fa-solid fa-microphone"></i>' : '<i class="fa-solid fa-microphone-slash"></i>';
-        };
-
-        const toggleVideo = () => {
-            isVideoMuted = !isVideoMuted;
-            localStream.getVideoTracks()[0].enabled = !isVideoMuted;
-            toggleVideoBtn.innerHTML = isVideoMuted ? '<i class="fa-solid fa-video"></i>' : '<i class="fa-solid fa-video-slash"></i>';
-        };
-
-        audioCallBtn.addEventListener('click', () => startCall(false));
-        videoCallBtn.addEventListener('click', () => startCall(true));
-        endCallBtn.addEventListener('click', endCall);
-        toggleAudioBtn.addEventListener('click', toggleAudio);
-        toggleVideoBtn.addEventListener('click', toggleVideo);
-
-        socket.on('end-call', () => {
-            endCall();
-            alert('Call ended by the other user.');
-        });
-        
-        // --- Event Listeners for Chat ---
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
