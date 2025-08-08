@@ -15,12 +15,14 @@
                 <span class="logo"><i class="fa-solid fa-blender-phone"></i></span>
                 <h1>VirtuSync</h1>
             </div>
+            <!-- Search Form -->
             <div class="search-container">
                 <i class="fa-solid fa-search"></i>
-                <input type="text" id="search-input" placeholder="Search contacts...">
+                <input type="text" id="search-input" placeholder="Search by email or ID...">
+                <button id="search-btn">Search</button>
             </div>
             <div class="contact-list" id="contact-list">
-                <!-- Contact items will be dynamically added here -->
+                <!-- Contact item will be added here after search or from recent contacts -->
             </div>
             <a href="/logout" class="logout-button">
                 <i class="fa-solid fa-right-from-bracket"></i>
@@ -31,7 +33,7 @@
         <!-- Main Chat Area -->
         <div class="main-chat-area">
             <div id="no-chat-selected" class="no-chat-selected">
-                Select a contact to start chatting.
+                Search for a user to start chatting.
             </div>
 
             <div id="chat-window" style="display: none; height: 100%; display: flex; flex-direction: column;">
@@ -66,13 +68,14 @@
     <script>
         const currentUserId = "<%- currentUser.id %>";
         let recipientId = null;
-        let allUsers = [];
+        let foundUser = null;
         let activeUsersList = [];
-        
+        let displayedContacts = new Set();
+
         const socket = io({
             query: { userId: currentUserId }
         });
-        
+
         const messagesContainer = document.getElementById('messages-container');
         const contactList = document.getElementById('contact-list');
         const chatWindow = document.getElementById('chat-window');
@@ -84,8 +87,14 @@
         const chatHeaderStatus = document.getElementById('chat-header-status');
         const audioCallBtn = document.getElementById('audio-call-btn');
         const videoCallBtn = document.getElementById('video-call-btn');
-        
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+
+        // Display a contact in the sidebar
         const displayContact = (contact) => {
+            if (displayedContacts.has(contact.id)) return; // Prevent duplicates
+            displayedContacts.add(contact.id);
+
             const contactDiv = document.createElement('div');
             contactDiv.classList.add('contact');
             contactDiv.setAttribute('data-id', contact.id);
@@ -93,7 +102,7 @@
             const avatarDiv = document.createElement('div');
             avatarDiv.classList.add('contact-avatar');
             avatarDiv.textContent = contact.email.substring(0, 2).toUpperCase();
-            
+
             const statusDot = document.createElement('div');
             statusDot.classList.add('status-dot');
             const status = activeUsersList.includes(String(contact.id)) ? 'online' : 'offline';
@@ -114,8 +123,8 @@
                 recipientId = contact.id;
                 chatHeaderName.textContent = contact.email;
                 chatHeaderAvatar.textContent = contact.email.substring(0, 2).toUpperCase();
-                chatHeaderStatus.textContent = activeUsersList.includes(String(contact.id)) ? 'online' : 'offline';
-                
+                chatHeaderStatus.textContent = status;
+
                 noChatSelected.style.display = 'none';
                 chatWindow.style.display = 'flex';
                 loadChatHistory(recipientId);
@@ -123,35 +132,59 @@
 
             contactList.appendChild(contactDiv);
         };
-        
-        const loadUsers = async () => {
-            contactList.innerHTML = '';
+
+        // Fetch and display recent contacts on page load or after sending a message
+        const loadRecentContacts = async () => {
             try {
-                const response = await fetch('/api/users');
-                if (!response.ok) {
-                    throw new Error('Failed to fetch users.');
-                }
-                allUsers = await response.json();
-                allUsers.forEach(user => {
-                    if (user.id != currentUserId) {
-                        displayContact(user);
-                    }
+                const response = await fetch('/api/recent-contacts');
+                if (!response.ok) throw new Error('Failed to fetch contacts');
+                const contacts = await response.json();
+                contactList.innerHTML = '';
+                displayedContacts.clear();
+                contacts.forEach(contact => {
+                    if (contact.id == currentUserId) return; // skip self
+                    displayContact(contact);
                 });
             } catch (err) {
-                console.error('Error loading users:', err);
+                contactList.innerHTML = '<div style="padding:10px;color:red;">Failed to load contacts.</div>';
+            }
+        };
+        window.addEventListener('DOMContentLoaded', loadRecentContacts);
+
+        // Search user by email or id
+        const searchUser = async () => {
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            let url = '/api/search-user?';
+            if (query.includes('@')) {
+                url += `email=${encodeURIComponent(query)}`;
+            } else {
+                url += `id=${encodeURIComponent(query)}`;
+            }
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('User not found.');
+                }
+                foundUser = await response.json();
+                if (foundUser.id == currentUserId) {
+                    alert("You can't chat with yourself.");
+                    return;
+                }
+                displayContact(foundUser);
+            } catch (err) {
+                contactList.innerHTML = '<div style="padding:10px;color:red;">User not found.</div>';
+                chatWindow.style.display = 'none';
+                noChatSelected.style.display = 'block';
             }
         };
 
-        const updateContactList = () => {
-            contactList.innerHTML = '';
-            allUsers.forEach(user => {
-                if (user.id != currentUserId) {
-                    displayContact(user);
-                }
-            });
-        };
-
-        loadUsers();
+        searchBtn.addEventListener('click', searchUser);
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchUser();
+        });
 
         const displayMessage = (data, isCallLink = false) => {
             const messageElement = document.createElement('div');
@@ -162,7 +195,7 @@
             } else {
                 messageElement.classList.add('other-message');
             }
-            
+
             if (isCallLink) {
                 messageElement.innerHTML = `<div class="message-content call-link-message">
                     <a href="${data.message}" target="_blank">Start Call</a>
@@ -173,7 +206,7 @@
                 contentDiv.textContent = data.message;
                 messageElement.appendChild(contentDiv);
             }
-            
+
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         };
@@ -194,36 +227,37 @@
                     }, isCallLink);
                 });
             } catch (err) {
-                console.error(err);
                 const statusElement = document.createElement('div');
                 statusElement.classList.add('status-message');
                 statusElement.textContent = 'Failed to load chat history.';
                 messagesContainer.appendChild(statusElement);
             }
         };
-        
+
         const sendMessage = () => {
             const message = messageInput.value.trim();
 
             if (recipientId && message) {
                 socket.emit('private-message', { recipientId, message });
                 messageInput.value = '';
+                // Refresh recent contacts after sending a message
+                setTimeout(loadRecentContacts, 500); // slight delay to ensure DB update
             }
         }
-        
+
         const sendCallLink = (audioOnly = false) => {
             if (!recipientId) {
                 alert('Please select a contact to call.');
                 return;
             }
-            
+
             // Create a unique room ID for this call
             const uniqueCallId = `${currentUserId}-${recipientId}-${Date.now()}`;
             const link = `/start-call/${recipientId}?callerId=${currentUserId}&callId=${uniqueCallId}&audioOnly=${audioOnly}`;
-            
+
             // Send a chat message with the link
             socket.emit('private-message', { recipientId, message: link });
-            
+
             // Open the call page in a new window for the caller
             window.open(link, '_blank');
         };
@@ -235,8 +269,18 @@
 
         socket.on('active-users', (users) => {
             activeUsersList = users;
-            console.log("Active users updated:", activeUsersList);
-            updateContactList();
+            // Update status dot if a contact is displayed
+            document.querySelectorAll('.contact').forEach(contactDiv => {
+                const id = contactDiv.getAttribute('data-id');
+                const status = activeUsersList.includes(String(id)) ? 'online' : 'offline';
+                const statusDot = contactDiv.querySelector('.status-dot');
+                if (statusDot) {
+                    statusDot.className = `status-dot ${status}`;
+                }
+                if (recipientId && id == recipientId) {
+                    chatHeaderStatus.textContent = status;
+                }
+            });
         });
 
         socket.on('chat-message', (data) => {
@@ -244,6 +288,12 @@
                 // Check if the message is a call link
                 const isCallLink = data.message.startsWith('/start-call/');
                 displayMessage(data, isCallLink);
+                // If the sender is not in contacts, add them
+                if (!displayedContacts.has(data.fromUserId) && data.fromUserId != currentUserId) {
+                    fetch(`/api/search-user?id=${data.fromUserId}`)
+                        .then(res => res.json())
+                        .then(user => displayContact(user));
+                }
             }
         });
 
@@ -257,7 +307,7 @@
 
         audioCallBtn.addEventListener('click', () => sendCallLink(true));
         videoCallBtn.addEventListener('click', () => sendCallLink(false));
-        
+
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
