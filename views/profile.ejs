@@ -21,9 +21,7 @@
                 <input type="text" id="search-input" placeholder="Search by email or ID...">
                 <button id="search-btn">Search</button>
             </div>
-            <div class="contact-list" id="contact-list">
-                <!-- Contact item will be added here after search or from recent contacts -->
-            </div>
+            <div class="contact-list" id="contact-list"></div>
             <a href="/logout" class="logout-button">
                 <i class="fa-solid fa-right-from-bracket"></i>
                 Logout
@@ -35,24 +33,21 @@
             <div id="no-chat-selected" class="no-chat-selected">
                 Search for a user to start chatting.
             </div>
-
             <div id="chat-window" style="display: none; height: 100%; display: flex; flex-direction: column;">
                 <div class="chat-header">
                     <div class="contact-info-container" style="display:flex; align-items: center;">
-                      <div class="contact-avatar" id="chat-header-avatar"></div>
-                      <div class="contact-info">
-                          <h4 id="chat-header-name"></h4>
-                          <p id="chat-header-status"></p>
-                      </div>
+                        <div class="contact-avatar" id="chat-header-avatar"></div>
+                        <div class="contact-info">
+                            <h4 id="chat-header-name"></h4>
+                            <p id="chat-header-status"></p>
+                        </div>
                     </div>
                     <div class="call-buttons">
                         <i id="audio-call-btn" class="fa-solid fa-phone"></i>
                         <i id="video-call-btn" class="fa-solid fa-video"></i>
                     </div>
                 </div>
-                <div class="chat-messages" id="messages-container">
-                    <!-- Chat messages will be appended here -->
-                </div>
+                <div class="chat-messages" id="messages-container"></div>
                 <div class="chat-input-area">
                     <i class="fa-solid fa-plus icon"></i>
                     <i class="fa-solid fa-image icon"></i>
@@ -72,9 +67,7 @@
         let activeUsersList = [];
         let displayedContacts = new Set();
 
-        const socket = io({
-            query: { userId: currentUserId }
-        });
+        const socket = io({ query: { userId: currentUserId } });
 
         const messagesContainer = document.getElementById('messages-container');
         const contactList = document.getElementById('contact-list');
@@ -92,7 +85,7 @@
 
         // Display a contact in the sidebar
         const displayContact = (contact) => {
-            if (displayedContacts.has(contact.id)) return; // Prevent duplicates
+            if (displayedContacts.has(contact.id)) return;
             displayedContacts.add(contact.id);
 
             const contactDiv = document.createElement('div');
@@ -142,7 +135,7 @@
                 contactList.innerHTML = '';
                 displayedContacts.clear();
                 contacts.forEach(contact => {
-                    if (contact.id == currentUserId) return; // skip self
+                    if (contact.id == currentUserId) return;
                     displayContact(contact);
                 });
             } catch (err) {
@@ -165,9 +158,7 @@
 
             try {
                 const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error('User not found.');
-                }
+                if (!response.ok) throw new Error('User not found.');
                 foundUser = await response.json();
                 if (foundUser.id == currentUserId) {
                     alert("You can't chat with yourself.");
@@ -197,8 +188,9 @@
             }
 
             if (isCallLink) {
+                // If the message is a call link, show as clickable link
                 messageElement.innerHTML = `<div class="message-content call-link-message">
-                    <a href="${data.message}" target="_blank">Start Call</a>
+                    <a href="${data.message}" target="_blank">Join the call</a>
                 </div>`;
             } else {
                 const contentDiv = document.createElement('div');
@@ -215,9 +207,7 @@
             messagesContainer.innerHTML = '';
             try {
                 const response = await fetch(`/api/chat-history?recipientId=${id}`);
-                if (!response.ok) {
-                    throw new Error('Failed to fetch chat history.');
-                }
+                if (!response.ok) throw new Error('Failed to fetch chat history.');
                 const messages = await response.json();
                 messages.forEach(msg => {
                     const isCallLink = msg.message_text.startsWith('/start-call/');
@@ -236,31 +226,31 @@
 
         const sendMessage = () => {
             const message = messageInput.value.trim();
-
             if (recipientId && message) {
                 socket.emit('private-message', { recipientId, message });
                 messageInput.value = '';
-                // Refresh recent contacts after sending a message
-                setTimeout(loadRecentContacts, 500); // slight delay to ensure DB update
+                setTimeout(loadRecentContacts, 500);
             }
         }
 
-        const sendCallLink = (audioOnly = false) => {
+        // --- NEW: Send call link with correct URLs for caller and callee ---
+        function sendCallInvite(audioOnly = false) {
             if (!recipientId) {
                 alert('Please select a contact to call.');
                 return;
             }
-
-            // Create a unique room ID for this call
             const uniqueCallId = `${currentUserId}-${recipientId}-${Date.now()}`;
-            const link = `/start-call/${recipientId}?callerId=${currentUserId}&callId=${uniqueCallId}&audioOnly=${audioOnly}`;
+            // Link for the caller (you)
+            const callLinkForCaller = `/start-call/${recipientId}?callerId=${currentUserId}&callId=${uniqueCallId}&audioOnly=${audioOnly}`;
+            // Link for the callee (recipient)
+            const callLinkForCallee = `/start-call/${currentUserId}?callerId=${recipientId}&callId=${uniqueCallId}&audioOnly=${audioOnly}`;
 
-            // Send a chat message with the link
-            socket.emit('private-message', { recipientId, message: link });
+            // Send a chat message with the link for the callee
+            socket.emit('private-message', { recipientId, message: callLinkForCallee });
 
-            // Open the call page in a new window for the caller
-            window.open(link, '_blank');
-        };
+            // Open the call page for the caller automatically
+            window.open(callLinkForCaller, '_blank');
+        }
 
         // --- Socket.IO Event Handlers ---
         socket.on('connect', () => {
@@ -269,26 +259,19 @@
 
         socket.on('active-users', (users) => {
             activeUsersList = users;
-            // Update status dot if a contact is displayed
             document.querySelectorAll('.contact').forEach(contactDiv => {
                 const id = contactDiv.getAttribute('data-id');
                 const status = activeUsersList.includes(String(id)) ? 'online' : 'offline';
                 const statusDot = contactDiv.querySelector('.status-dot');
-                if (statusDot) {
-                    statusDot.className = `status-dot ${status}`;
-                }
-                if (recipientId && id == recipientId) {
-                    chatHeaderStatus.textContent = status;
-                }
+                if (statusDot) statusDot.className = `status-dot ${status}`;
+                if (recipientId && id == recipientId) chatHeaderStatus.textContent = status;
             });
         });
 
         socket.on('chat-message', (data) => {
             if (data.fromUserId == recipientId || data.fromUserId == currentUserId) {
-                // Check if the message is a call link
                 const isCallLink = data.message.startsWith('/start-call/');
                 displayMessage(data, isCallLink);
-                // If the sender is not in contacts, add them
                 if (!displayedContacts.has(data.fromUserId) && data.fromUserId != currentUserId) {
                     fetch(`/api/search-user?id=${data.fromUserId}`)
                         .then(res => res.json())
@@ -305,14 +288,13 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         });
 
-        audioCallBtn.addEventListener('click', () => sendCallLink(true));
-        videoCallBtn.addEventListener('click', () => sendCallLink(false));
+        // --- Use sendCallInvite for call buttons ---
+        audioCallBtn.addEventListener('click', () => sendCallInvite(true));
+        videoCallBtn.addEventListener('click', () => sendCallInvite(false));
 
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
+            if (e.key === 'Enter') sendMessage();
         });
     </script>
 </body>
