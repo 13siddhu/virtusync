@@ -109,27 +109,16 @@ io.on('connection', (socket) => {
   // -----------------------------------------------------------------------------
   // ONE-ON-ONE WEBRTC SIGNALING
   // -----------------------------------------------------------------------------
-
-  // This is the new signaling for calls
-  socket.on('call-offer', (data) => {
-    const recipientSocketId = activeUsers.get(String(data.recipientId));
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('call-offer', {
-        fromUserId: socket.handshake.query.userId,
-        link: data.link
-      });
-    } else {
-      io.to(socket.id).emit('status', `User ${data.recipientId} is offline.`);
-    }
-  });
-
+  
   socket.on('offer', (data) => {
     const recipientSocketId = activeUsers.get(String(data.recipientId));
+    const fromUserId = socket.handshake.query.userId;
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('offer', {
-        fromUserId: socket.handshake.query.userId,
+        fromUserId: fromUserId,
         offer: data.offer
       });
+      console.log(`Offer from ${fromUserId} to ${data.recipientId}`);
     } else {
       io.to(socket.id).emit('status', `User ${data.recipientId} is offline.`);
     }
@@ -137,21 +126,25 @@ io.on('connection', (socket) => {
 
   socket.on('answer', (data) => {
     const recipientSocketId = activeUsers.get(String(data.recipientId));
+    const fromUserId = socket.handshake.query.userId;
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('answer', {
-        fromUserId: socket.handshake.query.userId,
+        fromUserId: fromUserId,
         answer: data.answer
       });
+      console.log(`Answer from ${fromUserId} to ${data.recipientId}`);
     }
   });
 
   socket.on('ice-candidate', (data) => {
     const recipientSocketId = activeUsers.get(String(data.recipientId));
+    const fromUserId = socket.handshake.query.userId;
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('ice-candidate', {
-        fromUserId: socket.handshake.query.userId,
+        fromUserId: fromUserId,
         candidate: data.candidate
       });
+      console.log(`ICE candidate from ${fromUserId} to ${data.recipientId}`);
     }
   });
 
@@ -187,19 +180,6 @@ app.get("/register", (req, res) => {
   res.render("register.ejs");
 });
 
-/*app.get("/api/users", async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).send("Unauthorized");
-  }
-  try {
-    const result = await db.query("SELECT id, email FROM users ORDER BY email ASC");
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Error fetching users:", err);
-    res.status(500).send("Internal Server Error");
-  }
-});*/
-
 app.get("/api/search-user", async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).send("Unauthorized");
@@ -231,7 +211,6 @@ app.get("/api/recent-contacts", async (req, res) => {
   }
   const currentUser = req.user.id;
   try {
-    // Get distinct user IDs from messages where currentUser is sender or recipient
     const result = await db.query(
       `SELECT DISTINCT
           CASE
@@ -245,7 +224,6 @@ app.get("/api/recent-contacts", async (req, res) => {
     const contactIds = result.rows.map(row => row.contact_id);
     if (contactIds.length === 0) return res.json([]);
 
-    // Fetch user details for these contacts
     const usersResult = await db.query(
       `SELECT id, email FROM users WHERE id = ANY($1::int[])`,
       [contactIds]
@@ -281,15 +259,21 @@ app.get("/api/chat-history", async (req, res) => {
   }
 });
 
-// New route for the dedicated video call page
+// Corrected route for the video call page.
+// This route now accepts the URL parameter format that was causing the error.
 app.get("/start-call/:recipientId", (req, res) => {
   if (!req.isAuthenticated()) {
     return res.redirect("/login");
   }
   const recipientId = req.params.recipientId;
-  res.render("start.ejs", { currentUser: req.user, recipientId: recipientId });
+  const callerId = req.user.id; // This assumes you're getting the callerId from the authenticated user
+  
+  if (!recipientId || !callerId) {
+      return res.status(400).send("Recipient ID and Caller ID are required.");
+  }
+  // The filename 'directcall.ejs' is used as requested.
+  res.render("DirectCall.ejs", { recipientId, callerId });
 });
-
 
 app.get("/profile", (req, res) => {
   if (req.isAuthenticated()) {
@@ -297,10 +281,6 @@ app.get("/profile", (req, res) => {
   } else {
     res.redirect("/login");
   }
-});
-
-app.get("/start", (req, res) => {
-  res.render("start.ejs");
 });
 
 app.get("/logout", (req, res) => {

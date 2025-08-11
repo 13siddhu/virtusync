@@ -3,7 +3,12 @@ let recipientId = urlParams.get('recipientId'); // The user you want to call
 let callerId = urlParams.get('callerId'); // Your own user ID
 const audioOnly = urlParams.get('audioOnly') === 'true';
 
-if (!callerId && window.currentUserId) callerId = window.currentUserId;
+// Ensure the callerId is set. In a real application, you'd get this from a session.
+// For this example, we'll assume it's passed in the URL.
+if (!callerId) {
+    console.error("Caller ID not provided. Cannot initiate call.");
+    // Handle this case, maybe redirect back to profile page.
+}
 
 const socket = io({ query: { userId: callerId } });
 
@@ -15,12 +20,19 @@ const config = {
 };
 
 async function startLocalStream() {
-    localStream = await navigator.mediaDevices.getUserMedia({
-        video: !audioOnly,
-        audio: true
-    });
-    const localVideo = document.getElementById('local');
-    if (localVideo) localVideo.srcObject = localStream;
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: !audioOnly,
+            audio: true
+        });
+        const localVideo = document.getElementById('local');
+        if (localVideo) {
+            localVideo.srcObject = localStream;
+        }
+    } catch (error) {
+        console.error("Error accessing media devices.", error);
+        alert("Failed to get local media stream. Please check your camera and microphone permissions.");
+    }
 }
 
 function createPeerConnection() {
@@ -34,21 +46,34 @@ function createPeerConnection() {
         if (event.candidate && recipientId) {
             socket.emit('ice-candidate', {
                 recipientId,
-                candidate: event.candidate
+                candidate: event.candidate,
+                fromUserId: callerId // Add sender info for server
             });
         }
     };
 
     peerConnection.ontrack = (event) => {
-        let remote = document.getElementById('remote');
-        if (!remote) {
-            remote = document.createElement('video');
-            remote.id = 'remote';
-            remote.autoplay = true;
-            remote.playsInline = true;
-            document.getElementById('videos-container').appendChild(remote);
+        let remoteVideo = document.getElementById('remote');
+        if (!remoteVideo) {
+            // Create a new video element and a wrapper for it
+            const remoteVideoWrapper = document.createElement('div');
+            remoteVideoWrapper.className = 'video-wrapper remote-video-wrapper';
+
+            remoteVideo = document.createElement('video');
+            remoteVideo.id = 'remote';
+            remoteVideo.autoplay = true;
+            remoteVideo.playsInline = true;
+
+            const remoteVideoLabel = document.createElement('div');
+            remoteVideoLabel.className = 'video-label';
+            remoteVideoLabel.innerText = 'Peer';
+
+            remoteVideoWrapper.appendChild(remoteVideo);
+            remoteVideoWrapper.appendChild(remoteVideoLabel);
+
+            document.getElementById('videos-container').appendChild(remoteVideoWrapper);
         }
-        remote.srcObject = event.streams[0];
+        remoteVideo.srcObject = event.streams[0];
     };
 }
 
@@ -63,8 +88,12 @@ async function makeOffer() {
 }
 
 socket.on('offer', async (data) => {
-    recipientId = data.fromUserId; // set recipientId to the caller for answer/ICE
-    createPeerConnection();
+    // This script is now the callee
+    if (!peerConnection) {
+        recipientId = data.fromUserId;
+        await startLocalStream(); // Start stream after receiving an offer
+        createPeerConnection();
+    }
     await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
@@ -80,7 +109,9 @@ socket.on('answer', async (data) => {
 
 socket.on('ice-candidate', async (data) => {
     try {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        if (data.candidate) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
     } catch (e) {
         console.error('Error adding received ice candidate', e);
     }
@@ -89,10 +120,11 @@ socket.on('ice-candidate', async (data) => {
 // Start everything
 (async () => {
     await startLocalStream();
-    // Only make an offer if this page was opened as the caller (not the callee)
-    // For the caller, recipientId !== your own userId
+    // Only make an offer if this page was opened as the caller
+    // For the caller, `recipientId` is the person they are calling.
+    // This checks if we are the one initiating the call by having a `recipientId`
     if (recipientId && callerId && recipientId !== callerId) {
         makeOffer();
     }
-    // The callee just waits for the offer event
+    // The callee just waits for the 'offer' event to be triggered by the server.
 })();
