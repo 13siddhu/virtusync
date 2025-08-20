@@ -9,13 +9,11 @@
 </head>
 <body>
     <div class="container">
-        <!-- Sidebar for Contacts -->
         <div class="sidebar">
             <div class="header">
                 <span class="logo"><i class="fa-solid fa-blender-phone"></i></span>
                 <h1>VirtuSync</h1>
             </div>
-            <!-- Search Form -->
             <div class="search-container">
                 <i class="fa-solid fa-search"></i>
                 <input type="text" id="search-input" placeholder="Search by email or ID...">
@@ -28,7 +26,6 @@
             </a>
         </div>
 
-        <!-- Main Chat Area -->
         <div class="main-chat-area">
             <div id="no-chat-selected" class="no-chat-selected">
                 Search for a user to start chatting.
@@ -66,7 +63,6 @@
         let foundUser = null;
         let activeUsersList = [];
         let displayedContacts = new Set();
-
         const socket = io({ query: { userId: currentUserId } });
 
         const messagesContainer = document.getElementById('messages-container');
@@ -83,7 +79,6 @@
         const searchInput = document.getElementById('search-input');
         const searchBtn = document.getElementById('search-btn');
 
-        // Display a contact in the sidebar
         const displayContact = (contact) => {
             if (displayedContacts.has(contact.id)) return;
             displayedContacts.add(contact.id);
@@ -95,7 +90,6 @@
             const avatarDiv = document.createElement('div');
             avatarDiv.classList.add('contact-avatar');
             avatarDiv.textContent = contact.email.substring(0, 2).toUpperCase();
-
             const statusDot = document.createElement('div');
             statusDot.classList.add('status-dot');
             const status = activeUsersList.includes(String(contact.id)) ? 'online' : 'offline';
@@ -122,11 +116,9 @@
                 chatWindow.style.display = 'flex';
                 loadChatHistory(recipientId);
             });
-
             contactList.appendChild(contactDiv);
         };
 
-        // Fetch and display recent contacts on page load or after sending a message
         const loadRecentContacts = async () => {
             try {
                 const response = await fetch('/api/recent-contacts');
@@ -143,8 +135,7 @@
             }
         };
         window.addEventListener('DOMContentLoaded', loadRecentContacts);
-
-        // Search user by email or id
+        
         const searchUser = async () => {
             const query = searchInput.value.trim();
             if (!query) return;
@@ -176,7 +167,6 @@
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchUser();
         });
-
         const displayMessage = (data, isCallLink = false) => {
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
@@ -188,7 +178,6 @@
             }
 
             if (isCallLink) {
-                // If the message is a call link, show as clickable link
                 messageElement.innerHTML = `<div class="message-content call-link-message">
                     <a href="${data.message}" target="_blank">Join the call</a>
                 </div>`;
@@ -223,7 +212,6 @@
                 messagesContainer.appendChild(statusElement);
             }
         };
-
         const sendMessage = () => {
             const message = messageInput.value.trim();
             if (recipientId && message) {
@@ -233,30 +221,26 @@
             }
         }
 
-        // --- NEW: Send call link with correct URLs for caller and callee ---
+        // --- NEW: Send call link with a single canonical URL ---
         function sendCallInvite(audioOnly = false) {
             if (!recipientId) {
                 alert('Please select a contact to call.');
                 return;
             }
-            const uniqueCallId = `${currentUserId}-${recipientId}-${Date.now()}`;
-            // Link for the caller (you)
-            const callLinkForCaller = `/start-call/${recipientId}?callerId=${currentUserId}&callId=${uniqueCallId}&audioOnly=${audioOnly}`;
-            // Link for the callee (recipient)
-            const callLinkForCallee = `/start-call/${currentUserId}?callerId=${recipientId}&callId=${uniqueCallId}&audioOnly=${audioOnly}`;
-
-            // Send a chat message with the link for the callee
-            socket.emit('private-message', { recipientId, message: callLinkForCallee });
-
-            // Open the call page for the caller automatically
-            window.open(callLinkForCaller, '_blank');
+            // Create a canonical call link that contains both callerId and recipientId
+            const callLink = `/start-call/${recipientId}?callerId=${currentUserId}&audioOnly=${audioOnly}`;
+            
+            // Send the call link to the recipient via chat
+            socket.emit('private-message', { recipientId, message: callLink });
+            
+            // Open the call page for the caller
+            window.open(callLink, '_blank', 'width=800,height=600');
         }
 
         // --- Socket.IO Event Handlers ---
         socket.on('connect', () => {
             console.log("Connected to server, sending user ID.");
         });
-
         socket.on('active-users', (users) => {
             activeUsersList = users;
             document.querySelectorAll('.contact').forEach(contactDiv => {
@@ -267,7 +251,6 @@
                 if (recipientId && id == recipientId) chatHeaderStatus.textContent = status;
             });
         });
-
         socket.on('chat-message', (data) => {
             if (data.fromUserId == recipientId || data.fromUserId == currentUserId) {
                 const isCallLink = data.message.startsWith('/start-call/');
@@ -279,7 +262,6 @@
                 }
             }
         });
-
         socket.on('status', (message) => {
             const statusElement = document.createElement('div');
             statusElement.classList.add('status-message');
@@ -287,8 +269,7 @@
             messagesContainer.appendChild(statusElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         });
-
-        // --- Use sendCallInvite for call buttons ---
+        
         audioCallBtn.addEventListener('click', () => sendCallInvite(true));
         videoCallBtn.addEventListener('click', () => sendCallInvite(false));
 

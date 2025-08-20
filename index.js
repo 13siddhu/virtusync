@@ -259,20 +259,23 @@ app.get("/api/chat-history", async (req, res) => {
   }
 });
 
-// Corrected route for the video call page.
-// This route now accepts the URL parameter format that was causing the error.
 app.get("/start-call/:recipientId", (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.redirect("/login");
-  }
-  const recipientId = req.params.recipientId;
-  const callerId = req.user.id; // This assumes you're getting the callerId from the authenticated user
-  
-  if (!recipientId || !callerId) {
-      return res.status(400).send("Recipient ID and Caller ID are required.");
-  }
-  // The filename 'directcall.ejs' is used as requested.
-  res.render("DirectCall.ejs", { recipientId, callerId });
+    if (!req.isAuthenticated()) {
+        return res.redirect("/login");
+    }
+    const { recipientId } = req.params;
+    const { audioOnly, callerId } = req.query; 
+    
+    if (!recipientId || !callerId) {
+        return res.status(400).send("Recipient ID and Caller ID are required.");
+    }
+    
+    res.render("DirectCall.ejs", {
+        recipientId,
+        callerId,
+        audioOnly: audioOnly === 'true',
+        currentUser: req.user // FIX: Pass currentUser to the EJS template
+    });
 });
 
 app.get("/profile", (req, res) => {
