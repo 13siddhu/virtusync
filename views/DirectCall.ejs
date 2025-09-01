@@ -9,28 +9,41 @@
 </head>
 <body>
     <div class="call-container">
-        <div id="call-status">Connecting...</div>
-        <div class="videos-container">
+        <div class="call-info-bar">
+            <h2 id="call-status">Connecting...</h2>
+        </div>
+
+        <div class="video-grid">
             <div class="video-wrapper remote-video-wrapper">
-                <video id="remote" autoplay playsinline></video>
+                <video id="remote" class="video-feed" autoplay playsinline></video>
                 <div class="video-label">Peer</div>
             </div>
+            
             <div class="video-wrapper local-video-wrapper">
-                <video id="local" autoplay playsinline muted></video>
+                <video id="local" class="video-feed" autoplay playsinline muted></video>
                 <div class="video-label">You</div>
             </div>
         </div>
-        <div class="controls">
-            <button id="toggle-audio-btn" class="control-button"><i class="fa-solid fa-microphone"></i></button>
-            <button id="toggle-video-btn" class="control-button"><i class="fa-solid fa-video"></i></button>
-            <button id="end-call-btn" class="control-button end-call"><i class="fa-solid fa-phone-slash"></i></button>
+
+        <div class="controls-container">
+            <div class="controls">
+                <button id="toggle-audio-btn" class="control-button" title="Mute/Unmute Audio">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                <button id="toggle-video-btn" class="control-button" title="Turn On/Off Video">
+                    <i class="fa-solid fa-video"></i>
+                </button>
+                <button id="end-call-btn" class="control-button end-call" title="End Call">
+                    <i class="fa-solid fa-phone-slash"></i>
+                </button>
+            </div>
         </div>
     </div>
     
     <script src="/socket.io/socket.io.js"></script>
     <script>
         // Data passed from the server
-        const recipientId = "<%- recipientId %>";
+        let recipientId = "<%- recipientId %>";
         const callerId = "<%- callerId %>";
         const audioOnly = <%- audioOnly %>;
         
@@ -51,6 +64,7 @@
         const localVideo = document.getElementById('local');
         const remoteVideo = document.getElementById('remote');
         
+        // Connect to Socket.IO with the user's ID
         const socket = io({ query: { userId: callerId } });
 
         async function startLocalStream() {
@@ -75,26 +89,41 @@
         }
 
         function createPeerConnection() {
+            console.log("Creating RTCPeerConnection...");
             peerConnection = new RTCPeerConnection(config);
             
             if (localStream) {
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
                 });
+                console.log("Local tracks added to peer connection.");
             }
             
+            // This event fires every time a new ICE candidate is generated
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
+                    console.log("Sending ICE candidate:", event.candidate);
                     socket.emit('ice-candidate', {
-                        recipientId: isCaller ? recipientId : callerId,
+                        recipientId: recipientId,
                         candidate: event.candidate,
+                        fromUserId: callerId,
                     });
                 }
             };
             
+            // This event fires when the remote stream is received
             peerConnection.ontrack = (event) => {
+                console.log("Received remote track.");
                 remoteVideo.srcObject = event.streams[0];
                 callStatus.textContent = 'Connected';
+            };
+
+            // Log peer connection state changes for debugging
+            peerConnection.oniceconnectionstatechange = () => {
+                console.log('ICE connection state:', peerConnection.iceConnectionState);
+                if (peerConnection.iceConnectionState === 'failed' || peerConnection.iceConnectionState === 'disconnected') {
+                    console.error("ICE connection failed or disconnected. Call will not work.");
+                }
             };
         }
         
@@ -106,6 +135,7 @@
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
             
+            console.log("Sending offer to recipient:", recipientId);
             socket.emit('offer', {
                 recipientId,
                 offer
@@ -116,16 +146,21 @@
 
         async function handleOffer(data) {
             isCaller = false;
+            // Crucial: Set the recipientId to the caller's ID so we can send the answer back
+            recipientId = data.fromUserId; 
+            
             await startLocalStream();
             createPeerConnection();
             
+            console.log("Received offer, setting remote description.");
             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
             
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
             
+            console.log("Sending answer to caller:", recipientId);
             socket.emit('answer', {
-                recipientId: data.fromUserId,
+                recipientId: recipientId,
                 answer
             });
             
@@ -134,20 +169,25 @@
         
         // --- Socket.IO Event Handlers ---
         socket.on('offer', (data) => {
+            console.log("Offer received from", data.fromUserId);
+            // Only handle the offer if we haven't already started a connection
             if (!peerConnection) {
                 handleOffer(data);
             }
         });
         
         socket.on('answer', async (data) => {
+            console.log("Answer received from", data.fromUserId);
             if (isCaller && peerConnection && !peerConnection.remoteDescription) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                console.log("Remote description set from answer.");
             }
         });
 
         socket.on('ice-candidate', async (data) => {
             try {
                 if (data.candidate && peerConnection) {
+                    console.log("Received ICE candidate from", data.fromUserId);
                     await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
                 }
             } catch (e) {
@@ -158,9 +198,11 @@
         socket.on('end-call', () => {
             alert("Call ended.");
             endCallLocally();
+            window.location.href = '/profile'; // Redirect to the profile page
         });
 
         function endCallLocally() {
+            console.log("Ending call locally...");
             if (peerConnection) {
                 peerConnection.close();
                 peerConnection = null;
@@ -174,10 +216,10 @@
 
         function endCall() {
             if (socket) {
-                socket.emit('end-call', { recipientId: isCaller ? recipientId : callerId });
+                socket.emit('end-call', { recipientId: recipientId });
             }
             endCallLocally();
-            window.close();
+            window.location.href = '/profile'; // Redirect to the profile page
         }
 
         // --- UI Event Listeners ---
