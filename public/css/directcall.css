@@ -1,7 +1,19 @@
+/* Using CSS variables for a cleaner, more maintainable theme */
+:root {
+    --bg-color: #0d0d10;
+    --surface-color: #1a1a24;
+    --accent-color: #7b68ee; /* A vibrant, modern purple */
+    --danger-color: #ff5252;
+    --text-color: #e0e0e0;
+    --shadow-light: rgba(0, 0, 0, 0.2);
+    --shadow-dark: rgba(0, 0, 0, 0.5);
+    --blur-strength: 20px;
+}
+
 body {
-    background-color: #121212;
-    color: #ffffff;
-    font-family: Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Poppins', 'Arial', sans-serif; /* A more modern font */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -29,8 +41,8 @@ body {
 #call-status {
     font-size: 1.5rem;
     font-weight: bold;
-    color: #fff;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    color: var(--text-color);
+    text-shadow: 1px 1px 4px var(--shadow-dark);
 }
 
 .video-grid {
@@ -42,14 +54,18 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 20px; /* Give a little breathing room */
+    box-sizing: border-box;
 }
 
 .video-wrapper {
     position: relative;
-    border-radius: 10px;
+    border-radius: 12px; /* Slightly more rounded */
     overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-    background-color: #000;
+    box-shadow: 
+        0 4px 10px var(--shadow-light), 
+        0 10px 25px var(--shadow-dark); /* Multi-layered shadow for depth */
+    background-color: var(--surface-color);
 }
 
 .video-feed {
@@ -67,26 +83,35 @@ body {
     position: absolute;
     bottom: 120px;
     right: 20px;
-    width: 250px; /* Smaller local video */
-    height: 180px;
-    border: 2px solid #3498db;
-    transition: transform 0.3s ease;
+    width: 20vw; /* Responsive width */
+    max-width: 250px; /* Prevents it from getting too big */
+    height: auto;
+    aspect-ratio: 16 / 9; /* Maintains video aspect ratio */
+    border: 3px solid var(--accent-color);
+    transition: 
+        transform 0.3s ease, 
+        box-shadow 0.3s ease;
     z-index: 5;
 }
 
 .local-video-wrapper:hover {
     transform: scale(1.05);
+    box-shadow: 
+        0 6px 15px var(--shadow-light), 
+        0 12px 30px var(--shadow-dark),
+        0 0 15px 5px rgba(123, 104, 238, 0.5); /* Add a subtle glow on hover */
 }
 
 .video-label {
     position: absolute;
-    bottom: 5px;
-    left: 5px;
-    background: rgba(0, 0, 0, 0.5);
-    color: white;
-    padding: 2px 8px;
-    border-radius: 5px;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.4);
+    color: var(--text-color);
+    padding: 4px 12px;
+    border-radius: 20px; /* Pill shape */
     font-size: 0.8rem;
+    text-shadow: 1px 1px 2px var(--shadow-dark);
 }
 
 .controls-container {
@@ -99,40 +124,54 @@ body {
 }
 
 .controls {
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(26, 26, 36, 0.5); /* Semi-transparent background */
+    backdrop-filter: blur(var(--blur-strength)); /* Frosted glass effect */
+    -webkit-backdrop-filter: blur(var(--blur-strength)); /* For Safari */
     border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
     padding: 10px 20px;
     display: flex;
     gap: 20px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    box-shadow: 
+        0 4px 10px var(--shadow-light), 
+        0 8px 20px var(--shadow-dark);
 }
 
 .control-button {
-    background-color: #34495e;
-    color: #ecf0f1;
+    background-color: var(--surface-color);
+    color: var(--text-color);
     border: none;
     padding: 15px;
     border-radius: 50%;
     font-size: 1.2rem;
     cursor: pointer;
-    transition: background-color 0.2s ease, transform 0.2s ease;
+    transition: 
+        background-color 0.3s ease, 
+        transform 0.3s ease, 
+        box-shadow 0.3s ease;
 }
 
 .control-button:hover {
-    background-color: #496279;
-    transform: scale(1.1);
+    background-color: var(--accent-color); /* Highlight with the accent color */
+    transform: translateY(-2px); /* Slight lift effect */
+    box-shadow: 0 4px 15px rgba(123, 104, 238, 0.5); /* Glow effect */
+    color: white; /* Ensure good contrast */
 }
 
 .control-button:active {
-    transform: scale(0.95);
+    transform: translateY(1px) scale(0.95);
+    box-shadow: none;
 }
 
 .control-button.end-call {
-    background-color: #e74c3c;
+    background-color: var(--danger-color);
+    color: white;
 }
 
 .control-button.end-call:hover {
-    background-color: #c0392b;
+    background-color: #ff3333;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255, 82, 82, 0.5);
 }
 
 /* Hide remote video when not connected */

@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Calling & Chat</title>
+    <title>VirtuSync</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="/css/profile.css">
 </head>
 <body>
+    <div class="animated-bg"></div>
     <div class="container">
         <div class="sidebar">
             <div class="header">
@@ -28,11 +29,13 @@
 
         <div class="main-chat-area">
             <div id="no-chat-selected" class="no-chat-selected">
-                Search for a user to start chatting.
+                <i class="fa-solid fa-comments"></i>
+                <h2>Welcome to VirtuSync</h2>
+                <p>Search for a user to start chatting or select a recent contact from the list.</p>
             </div>
-            <div id="chat-window" style="display: none; height: 100%; display: flex; flex-direction: column;">
+            <div id="chat-window" style="display: none;">
                 <div class="chat-header">
-                    <div class="contact-info-container" style="display:flex; align-items: center;">
+                    <div class="contact-info-container">
                         <div class="contact-avatar" id="chat-header-avatar"></div>
                         <div class="contact-info">
                             <h4 id="chat-header-name"></h4>
@@ -40,17 +43,20 @@
                         </div>
                     </div>
                     <div class="call-buttons">
-                        <i id="audio-call-btn" class="fa-solid fa-phone"></i>
-                        <i id="video-call-btn" class="fa-solid fa-video"></i>
+                        <button id="audio-call-btn" class="call-btn audio"><i class="fa-solid fa-phone"></i></button>
+                        <button id="video-call-btn" class="call-btn video"><i class="fa-solid fa-video"></i></button>
                     </div>
                 </div>
                 <div class="chat-messages" id="messages-container"></div>
                 <div class="chat-input-area">
-                    <i class="fa-solid fa-plus icon"></i>
-                    <i class="fa-solid fa-image icon"></i>
-                    <i class="fa-solid fa-microphone icon"></i>
+                    <button class="input-btn"><i class="fa-solid fa-paperclip"></i></button>
+                    <label for="image-upload" class="input-btn">
+                        <i class="fa-solid fa-image"></i>
+                        <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                    </label>
+                    <button class="input-btn"><i class="fa-solid fa-microphone"></i></button>
                     <input type="text" id="message-input" placeholder="Message..." required>
-                    <button id="send-button"><i class="fa-solid fa-paper-plane"></i></button>
+                    <button id="send-button" class="send-btn"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
@@ -78,6 +84,7 @@
         const videoCallBtn = document.getElementById('video-call-btn');
         const searchInput = document.getElementById('search-input');
         const searchBtn = document.getElementById('search-btn');
+        const imageUpload = document.getElementById('image-upload');
 
         const displayContact = (contact) => {
             if (displayedContacts.has(contact.id)) return;
@@ -159,7 +166,7 @@
             } catch (err) {
                 contactList.innerHTML = '<div style="padding:10px;color:red;">User not found.</div>';
                 chatWindow.style.display = 'none';
-                noChatSelected.style.display = 'block';
+                noChatSelected.style.display = 'flex';
             }
         };
 
@@ -177,17 +184,23 @@
                 messageElement.classList.add('other-message');
             }
 
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('message-content');
+
             if (isCallLink) {
-                messageElement.innerHTML = `<div class="message-content call-link-message">
+                contentDiv.innerHTML = `<div class="call-link-message">
                     <a href="${data.message}" target="_blank">Join the call</a>
                 </div>`;
+            } else if (data.message.startsWith('data:image/')) {
+                 const img = new Image();
+                 img.src = data.message;
+                 img.classList.add('chat-image');
+                 contentDiv.appendChild(img);
             } else {
-                const contentDiv = document.createElement('div');
-                contentDiv.classList.add('message-content');
                 contentDiv.textContent = data.message;
-                messageElement.appendChild(contentDiv);
             }
 
+            messageElement.appendChild(contentDiv);
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         };
@@ -212,8 +225,7 @@
                 messagesContainer.appendChild(statusElement);
             }
         };
-        const sendMessage = () => {
-            const message = messageInput.value.trim();
+        const sendMessage = (message) => {
             if (recipientId && message) {
                 socket.emit('private-message', { recipientId, message });
                 messageInput.value = '';
@@ -221,23 +233,30 @@
             }
         }
 
-        // --- NEW: Send call link with a single canonical URL ---
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && recipientId) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const base64Image = event.target.result;
+                    sendMessage(base64Image);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
         function sendCallInvite(audioOnly = false) {
             if (!recipientId) {
                 alert('Please select a contact to call.');
                 return;
             }
-            // Create a canonical call link that contains both callerId and recipientId
             const callLink = `/start-call/${recipientId}?callerId=${currentUserId}&audioOnly=${audioOnly}`;
             
-            // Send the call link to the recipient via chat
             socket.emit('private-message', { recipientId, message: callLink });
             
-            // Open the call page for the caller
             window.open(callLink, '_blank', 'width=800,height=600');
         }
 
-        // --- Socket.IO Event Handlers ---
         socket.on('connect', () => {
             console.log("Connected to server, sending user ID.");
         });
@@ -273,9 +292,15 @@
         audioCallBtn.addEventListener('click', () => sendCallInvite(true));
         videoCallBtn.addEventListener('click', () => sendCallInvite(false));
 
-        sendButton.addEventListener('click', sendMessage);
+        sendButton.addEventListener('click', () => {
+            const message = messageInput.value.trim();
+            sendMessage(message);
+        });
         messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
+            if (e.key === 'Enter') {
+                const message = messageInput.value.trim();
+                sendMessage(message);
+            }
         });
     </script>
 </body>
