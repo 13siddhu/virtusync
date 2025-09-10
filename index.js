@@ -111,20 +111,23 @@ io.on('connection', (socket) => {
   // -----------------------------------------------------------------------------
   
   socket.on('offer', (data) => {
+    // Send the offer to the room ID as the recipient
     const recipientSocketId = activeUsers.get(String(data.recipientId));
     const fromUserId = socket.handshake.query.userId;
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('offer', {
         fromUserId: fromUserId,
-        offer: data.offer
+        offer: data.offer,
+        recipientId: data.recipientId
       });
-      console.log(`Offer from ${fromUserId} to ${data.recipientId}`);
+      console.log(`Offer from ${fromUserId} to room ${data.recipientId}`);
     } else {
       io.to(socket.id).emit('status', `User ${data.recipientId} is offline.`);
     }
   });
 
   socket.on('answer', (data) => {
+    // Send the answer to the caller
     const recipientSocketId = activeUsers.get(String(data.recipientId));
     const fromUserId = socket.handshake.query.userId;
     if (recipientSocketId) {
@@ -137,6 +140,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('ice-candidate', (data) => {
+    // Send the ICE candidate to the recipient
     const recipientSocketId = activeUsers.get(String(data.recipientId));
     const fromUserId = socket.handshake.query.userId;
     if (recipientSocketId) {
@@ -149,6 +153,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('end-call', (data) => {
+    // End the call for the other person in the room
     const recipientSocketId = activeUsers.get(String(data.recipientId));
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('end-call');
@@ -170,6 +175,11 @@ io.on('connection', (socket) => {
 
 app.get("/", (req, res) => {
   res.render("index.ejs");
+});
+
+app.get("/directcall", (req, res) => {
+    const roomId = req.query.room || null; // Get room ID or set to null
+    res.render("directcall.ejs", { roomId: roomId, currentUser: req.user });
 });
 
 app.get("/login", (req, res) => {
@@ -274,7 +284,7 @@ app.get("/start-call/:recipientId", (req, res) => {
         recipientId,
         callerId,
         audioOnly: audioOnly === 'true',
-        currentUser: req.user // FIX: Pass currentUser to the EJS template
+        currentUser: req.user
     });
 });
 

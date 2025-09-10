@@ -1,0 +1,317 @@
+<%- include("partials/header.ejs") %><body><!-- Main container for both setup and call view --><div class="call-container">    <!-- Room setup view (initially visible) -->
+    <div id="setup-view" class="setup-view">
+        <h2 class="text-3xl font-bold mb-6 text-center text-white">Start or Join a Direct Call</h2>
+        <div class="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-8">
+            <!-- Host Section -->
+            <div class="flex-1 p-6 bg-gray-700 rounded-xl">
+                <h3 class="text-xl font-semibold mb-4">Host a Call</h3>
+                <button id="generate-room-id" class="w-full bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors duration-300 mb-4">
+                    Generate Room ID
+                </button>
+                <div id="room-id-display" class="hidden text-center bg-gray-900 p-4 rounded-lg shadow-inner mb-4">
+                    <p class="text-gray-400">Share this Room ID:</p>
+                    <div class="flex items-center justify-center mt-2">
+                        <span id="room-id-value" class="text-3xl font-extrabold text-indigo-400 mr-4"></span>
+                        <button id="copy-room-id" class="bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 transition-colors duration-300 text-sm">
+                            <i class="fa-solid fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <button id="host-enter-room" class="hidden w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors duration-300">
+                    Enter Room
+                </button>
+            </div>
+
+            <!-- Guest Section -->
+            <div class="flex-1 p-6 bg-gray-700 rounded-xl">
+                <h3 class="text-xl font-semibold mb-4">Join a Call</h3>
+                <div class="relative mb-4">
+                    <input type="text" id="room-id-input" placeholder="Enter Room ID" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button id="join-room-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors duration-300">
+                    Join Room
+                </button>
+            </div>
+        </div>
+        <div id="setup-status-message" class="mt-6 text-center text-gray-400 text-sm hidden"></div>
+    </div>
+
+    <!-- Video call view (initially hidden) -->
+    <div id="call-view" class="hidden w-full h-full relative z-20 flex flex-col items-center justify-center p-4">
+        <h2 id="call-status" class="text-3xl font-bold mb-2 text-center text-white">Connecting...</h2>
+        <p id="room-id-display" class="text-xl font-semibold mb-6 text-gray-400">Room ID: </p>
+        <div class="relative w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl aspect-video">
+            <video id="local" class="video-feed w-full h-full object-cover absolute top-0 left-0" autoplay playsinline muted></video>
+            <video id="remote" class="video-feed w-full h-full object-cover hidden" autoplay playsinline></video>
+            <div id="peer-placeholder" class="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-70">
+                <div class="text-white text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 mx-auto mb-4 text-gray-500 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-4l4-4m4 4l-4 4m2-2h-2M4 21v-2a4 4 0 014-4h.5a4 4 0 014 4v2a1 1 0 01-1 1H5a1 1 0 01-1-1zM16 3a1 1 0 011-1h.5a1 1 0 011 1v.5a1 1 0 01-1 1H17a1 1 0 01-1-1V3zM4 3a1 1 0 011-1h.5a1 1 0 011 1v.5a1 1 0 01-1 1H5a1 1 0 01-1-1V3z" />
+                    </svg>
+                    <p class="text-gray-400 text-lg">Waiting for peer to join...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls-container mt-8">
+            <div class="controls">
+                <button id="toggle-audio-btn" class="control-button" title="Mute/Unmute Audio">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                <button id="toggle-video-btn" class="control-button" title="Turn On/Off Video">
+                    <i class="fa-solid fa-video"></i>
+                </button>
+                <button id="end-call-btn" class="control-button end-call" title="End Call">
+                    <i class="fa-solid fa-phone-slash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Modal for Alerts -->
+<div id="modal-container" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-96 text-center">
+        <p id="modal-message" class="text-lg text-white mb-4"></p>
+        <button id="modal-close" class="bg-indigo-600 text-white py-2 px-6 rounded-md hover:bg-indigo-700 transition-colors duration-300">OK</button>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlRoomId = urlParams.get('room');
+
+    const setupView = document.getElementById('setup-view');
+    const callView = document.getElementById('call-view');
+    
+    const generateRoomIdButton = document.getElementById('generate-room-id');
+    const copyRoomIdButton = document.getElementById('copy-room-id');
+    const joinRoomButton = document.getElementById('join-room-button');
+    const hostEnterRoomButton = document.getElementById('host-enter-room');
+    const roomIdDisplaySetup = document.getElementById('room-id-display');
+    const roomIdValue = document.getElementById('room-id-value');
+    const roomIdInput = document.getElementById('room-id-input');
+    const setupStatusMessage = document.getElementById('setup-status-message');
+    
+    const callStatus = document.getElementById('call-status');
+    const roomIdDisplayCall = document.getElementById('room-id-display');
+    const endCallBtn = document.getElementById('end-call-btn');
+    const toggleAudioBtn = document.getElementById('toggle-audio-btn');
+    const toggleVideoBtn = document.getElementById('toggle-video-btn');
+    const localVideo = document.getElementById('local');
+    const remoteVideo = document.getElementById('remote');
+    const peerPlaceholder = document.getElementById('peer-placeholder');
+    
+    const modalContainer = document.getElementById('modal-container');
+    const modalMessage = document.getElementById('modal-message');
+    const modalCloseButton = document.getElementById('modal-close');
+
+    let localStream;
+    let peerConnection;
+    let localVideoTrack;
+    let localAudioTrack;
+    let isCaller = false;
+    
+    // Use a static or generated ID for the current user
+    // This is a placeholder since you don't have a login system on this page
+    const currentUser = { id: `<%- currentUser.id %>` };
+
+    // Connect to Socket.IO with the user's ID
+    const socket = io({ query: { userId: currentUser.id } });
+
+    // --- Utility Functions ---
+    function showModal(message) {
+        modalMessage.textContent = message;
+        modalContainer.classList.remove('hidden');
+    }
+
+    function endCallLocally() {
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+        }
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+        }
+        if (localVideo) localVideo.srcObject = null;
+        if (remoteVideo) remoteVideo.srcObject = null;
+    }
+
+    // --- Room Setup Logic ---
+    generateRoomIdButton.addEventListener('click', () => {
+        const newRoomId = Math.floor(100000 + Math.random() * 900000); // 6-digit number
+        roomIdValue.textContent = newRoomId;
+        roomIdDisplaySetup.classList.remove('hidden');
+        hostEnterRoomButton.classList.remove('hidden');
+        setupStatusMessage.textContent = "Room ID generated. Click 'Enter Room' to start.";
+        setupStatusMessage.classList.remove('hidden');
+    });
+
+    copyRoomIdButton.addEventListener('click', () => {
+        const roomId = roomIdValue.textContent;
+        if (roomId) {
+            const tempInput = document.createElement('input');
+            tempInput.value = roomId;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            showModal('Room ID copied to clipboard!');
+        }
+    });
+
+    hostEnterRoomButton.addEventListener('click', () => {
+        const roomId = roomIdValue.textContent;
+        window.location.href = `/direct-call?room=${roomId}`;
+    });
+
+    joinRoomButton.addEventListener('click', () => {
+        const enteredId = roomIdInput.value;
+        if (enteredId.length === 6 && !isNaN(enteredId)) {
+            window.location.href = `/direct-call?room=${enteredId}`;
+        } else {
+            setupStatusMessage.textContent = "Please enter a valid 6-digit Room ID.";
+            setupStatusMessage.classList.remove('hidden');
+        }
+    });
+
+    // --- Video Call Logic ---
+    async function startCall(roomId) {
+        setupView.classList.add('hidden');
+        callView.classList.remove('hidden');
+        
+        roomIdDisplayCall.textContent = `Room ID: ${roomId}`;
+        
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localVideo.srcObject = localStream;
+            localVideo.play();
+        } catch (error) {
+            console.error("Error accessing media devices.", error);
+            showModal("Failed to get local media stream. Please check your camera and microphone permissions.");
+            endCallLocally();
+            window.location.href = `/direct-call`;
+            return;
+        }
+
+        // WebRTC Logic
+        const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        peerConnection = new RTCPeerConnection(config);
+        
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+        
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice-candidate', {
+                    recipientId: roomId, // Use the room ID as the signaling target
+                    candidate: event.candidate,
+                    fromUserId: currentUser.id,
+                });
+            }
+        };
+        
+        peerConnection.ontrack = (event) => {
+            remoteVideo.srcObject = event.streams[0];
+            remoteVideo.classList.remove('hidden');
+            peerPlaceholder.classList.add('hidden');
+            callStatus.textContent = 'Connected';
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+            if (peerConnection.iceConnectionState === 'failed' || peerConnection.iceConnectionState === 'disconnected') {
+                console.error("ICE connection failed or disconnected. Call will not work.");
+            }
+        };
+
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        
+        // Send offer to the room, not a specific recipient
+        socket.emit('offer', {
+            recipientId: roomId,
+            offer,
+        });
+        callStatus.textContent = 'Calling...';
+    }
+
+    // --- Socket.IO Event Handlers ---
+    socket.on('offer', async (data) => {
+        if (data.recipientId === urlRoomId && !peerConnection) { // Check if offer is for this room and we don't have a connection yet
+            await startCall(data.recipientId);
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            
+            socket.emit('answer', {
+                recipientId: data.fromUserId,
+                answer,
+            });
+            callStatus.textContent = 'Answering...';
+        }
+    });
+
+    socket.on('answer', async (data) => {
+        if (peerConnection && !peerConnection.remoteDescription) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        }
+    });
+
+    socket.on('ice-candidate', async (data) => {
+        try {
+            if (data.candidate && peerConnection) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        } catch (e) {
+            console.error('Error adding received ICE candidate', e);
+        }
+    });
+    
+    socket.on('end-call', () => {
+        showModal("Call ended.");
+        endCallLocally();
+        window.location.href = `/direct-call`;
+    });
+
+    // --- UI Event Listeners ---
+    endCallBtn.addEventListener('click', () => {
+        if (socket) {
+            socket.emit('end-call', { recipientId: urlRoomId });
+        }
+        endCallLocally();
+        window.location.href = `/direct-call`;
+    });
+
+    toggleAudioBtn.addEventListener('click', () => {
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                const icon = toggleAudioBtn.querySelector('i');
+                icon.className = audioTrack.enabled ? 'fa-solid fa-microphone' : 'fa-solid fa-microphone-slash';
+            }
+        }
+    });
+    
+    toggleVideoBtn.addEventListener('click', () => {
+        if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !videoTrack.enabled;
+                const icon = toggleVideoBtn.querySelector('i');
+                icon.className = videoTrack.enabled ? 'fa-solid fa-video' : 'fa-solid fa-video-slash';
+            }
+        }
+    });
+
+    modalCloseButton.addEventListener('click', () => {
+        modalContainer.classList.add('hidden');
+    });
+    
+    // Initial page load logic
+    if (urlRoomId) {
+        startCall(urlRoomId);
+    }
+</script>
+</body><%- include("partials/footer.ejs") %>

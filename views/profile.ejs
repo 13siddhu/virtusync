@@ -15,9 +15,19 @@
                 <span class="logo"><i class="fa-solid fa-blender-phone"></i></span>
                 <h1>VirtuSync</h1>
             </div>
+            
+            <div class="user-profile">
+                <div class="profile-avatar">
+                    <i class="fa-solid fa-user-circle"></i>
+                </div>
+                <div class="profile-info">
+                    <h4><%= currentUser.email %></h4>
+                </div>
+            </div>
+            
             <div class="search-container">
                 <i class="fa-solid fa-search"></i>
-                <input type="text" id="search-input" placeholder="Search by email or ID...">
+                <input type="text" id="search-input" placeholder="Search by email...">
                 <button id="search-btn">Search</button>
             </div>
             <div class="contact-list" id="contact-list"></div>
@@ -66,9 +76,8 @@
     <script>
         const currentUserId = "<%- currentUser.id %>";
         let recipientId = null;
-        let foundUser = null;
         let activeUsersList = [];
-        let displayedContacts = new Set();
+        const displayedContacts = new Map();
         const socket = io({ query: { userId: currentUserId } });
 
         const messagesContainer = document.getElementById('messages-container');
@@ -86,44 +95,69 @@
         const searchBtn = document.getElementById('search-btn');
         const imageUpload = document.getElementById('image-upload');
 
-        const displayContact = (contact) => {
-            if (displayedContacts.has(contact.id)) return;
-            displayedContacts.add(contact.id);
+        const addOrMoveContact = (contact) => {
+            if (contact.id == currentUserId) return;
+            
+            let contactDiv;
+            if (displayedContacts.has(contact.id)) {
+                contactDiv = displayedContacts.get(contact.id);
+            } else {
+                contactDiv = document.createElement('div');
+                contactDiv.classList.add('contact');
+                contactDiv.setAttribute('data-id', contact.id);
 
-            const contactDiv = document.createElement('div');
-            contactDiv.classList.add('contact');
-            contactDiv.setAttribute('data-id', contact.id);
+                const avatarDiv = document.createElement('div');
+                avatarDiv.classList.add('contact-avatar');
+                avatarDiv.textContent = contact.email.substring(0, 2).toUpperCase();
+                const statusDot = document.createElement('div');
+                statusDot.classList.add('status-dot');
+                avatarDiv.appendChild(statusDot);
 
-            const avatarDiv = document.createElement('div');
-            avatarDiv.classList.add('contact-avatar');
-            avatarDiv.textContent = contact.email.substring(0, 2).toUpperCase();
-            const statusDot = document.createElement('div');
-            statusDot.classList.add('status-dot');
-            const status = activeUsersList.includes(String(contact.id)) ? 'online' : 'offline';
-            statusDot.classList.add(status);
-            avatarDiv.appendChild(statusDot);
+                const infoDiv = document.createElement('div');
+                infoDiv.classList.add('contact-info');
+                infoDiv.innerHTML = `<h4>${contact.email}</h4><p></p>`;
 
-            const infoDiv = document.createElement('div');
-            infoDiv.classList.add('contact-info');
-            infoDiv.innerHTML = `<h4>${contact.email}</h4><p>${status}</p>`;
+                contactDiv.appendChild(avatarDiv);
+                contactDiv.appendChild(infoDiv);
+                
+                contactDiv.addEventListener('click', () => {
+                    document.querySelectorAll('.contact').forEach(c => c.classList.remove('active'));
+                    contactDiv.classList.add('active');
 
-            contactDiv.appendChild(avatarDiv);
-            contactDiv.appendChild(infoDiv);
+                    recipientId = contact.id;
+                    chatHeaderName.textContent = contact.email;
+                    chatHeaderAvatar.textContent = contact.email.substring(0, 2).toUpperCase();
+                    
+                    noChatSelected.style.display = 'none';
+                    chatWindow.style.display = 'flex';
+                    loadChatHistory(recipientId);
+                    updateContactStatus(contact.id);
+                });
+                displayedContacts.set(contact.id, contactDiv);
+            }
+            
+            // Move contact to the top of the list
+            if (contactList.firstChild !== contactDiv) {
+                contactList.prepend(contactDiv);
+            }
 
-            contactDiv.addEventListener('click', () => {
-                document.querySelectorAll('.contact').forEach(c => c.classList.remove('active'));
-                contactDiv.classList.add('active');
+            // Update status text and dot color
+            updateContactStatus(contact.id);
+        };
 
-                recipientId = contact.id;
-                chatHeaderName.textContent = contact.email;
-                chatHeaderAvatar.textContent = contact.email.substring(0, 2).toUpperCase();
-                chatHeaderStatus.textContent = status;
-
-                noChatSelected.style.display = 'none';
-                chatWindow.style.display = 'flex';
-                loadChatHistory(recipientId);
-            });
-            contactList.appendChild(contactDiv);
+        const updateContactStatus = (contactId) => {
+            const contactDiv = displayedContacts.get(contactId);
+            if (contactDiv) {
+                const status = activeUsersList.includes(String(contactId)) ? 'online' : 'offline';
+                const statusDot = contactDiv.querySelector('.status-dot');
+                const statusText = contactDiv.querySelector('.contact-info p');
+                if (statusDot) statusDot.className = `status-dot ${status}`;
+                if (statusText) statusText.textContent = status;
+                
+                if (contactId == recipientId) {
+                    chatHeaderStatus.textContent = status;
+                }
+            }
         };
 
         const loadRecentContacts = async () => {
@@ -131,21 +165,23 @@
                 const response = await fetch('/api/recent-contacts');
                 if (!response.ok) throw new Error('Failed to fetch contacts');
                 const contacts = await response.json();
-                contactList.innerHTML = '';
-                displayedContacts.clear();
+                
                 contacts.forEach(contact => {
-                    if (contact.id == currentUserId) return;
-                    displayContact(contact);
+                    addOrMoveContact(contact);
                 });
             } catch (err) {
-                contactList.innerHTML = '<div style="padding:10px;color:red;">Failed to load contacts.</div>';
+                console.error("Error loading recent contacts:", err);
             }
         };
-        window.addEventListener('DOMContentLoaded', loadRecentContacts);
-        
+
         const searchUser = async () => {
             const query = searchInput.value.trim();
             if (!query) return;
+
+            if (query == currentUserId || (query.includes('@') && query === "<%- currentUser.email %>")) {
+                alert("You cannot search for yourself.");
+                return;
+            }
 
             let url = '/api/search-user?';
             if (query.includes('@')) {
@@ -157,16 +193,18 @@
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('User not found.');
-                foundUser = await response.json();
-                if (foundUser.id == currentUserId) {
-                    alert("You can't chat with yourself.");
-                    return;
+                const foundUser = await response.json();
+
+                addOrMoveContact(foundUser);
+                
+                const contactToActivate = displayedContacts.get(foundUser.id);
+                if (contactToActivate) {
+                    contactToActivate.click();
                 }
-                displayContact(foundUser);
+
             } catch (err) {
-                contactList.innerHTML = '<div style="padding:10px;color:red;">User not found.</div>';
-                chatWindow.style.display = 'none';
-                noChatSelected.style.display = 'flex';
+                console.error('Error searching user:', err);
+                alert('User not found.');
             }
         };
 
@@ -174,6 +212,7 @@
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchUser();
         });
+        
         const displayMessage = (data, isCallLink = false) => {
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
@@ -225,11 +264,11 @@
                 messagesContainer.appendChild(statusElement);
             }
         };
+
         const sendMessage = (message) => {
             if (recipientId && message) {
                 socket.emit('private-message', { recipientId, message });
                 messageInput.value = '';
-                setTimeout(loadRecentContacts, 500);
             }
         }
 
@@ -252,35 +291,37 @@
             }
             const callLink = `/start-call/${recipientId}?callerId=${currentUserId}&audioOnly=${audioOnly}`;
             
-            socket.emit('private-message', { recipientId, message: callLink });
-            
             window.open(callLink, '_blank', 'width=800,height=600');
+            
+            sendMessage(callLink);
         }
 
         socket.on('connect', () => {
             console.log("Connected to server, sending user ID.");
+            loadRecentContacts();
         });
+
         socket.on('active-users', (users) => {
             activeUsersList = users;
-            document.querySelectorAll('.contact').forEach(contactDiv => {
-                const id = contactDiv.getAttribute('data-id');
-                const status = activeUsersList.includes(String(id)) ? 'online' : 'offline';
-                const statusDot = contactDiv.querySelector('.status-dot');
-                if (statusDot) statusDot.className = `status-dot ${status}`;
-                if (recipientId && id == recipientId) chatHeaderStatus.textContent = status;
+            displayedContacts.forEach((contactDiv, id) => {
+                updateContactStatus(id);
             });
         });
+
         socket.on('chat-message', (data) => {
             if (data.fromUserId == recipientId || data.fromUserId == currentUserId) {
                 const isCallLink = data.message.startsWith('/start-call/');
                 displayMessage(data, isCallLink);
-                if (!displayedContacts.has(data.fromUserId) && data.fromUserId != currentUserId) {
-                    fetch(`/api/search-user?id=${data.fromUserId}`)
-                        .then(res => res.json())
-                        .then(user => displayContact(user));
-                }
+            }
+            
+            if (!displayedContacts.has(data.fromUserId) && data.fromUserId != currentUserId) {
+                fetch(`/api/search-user?id=${data.fromUserId}`)
+                    .then(res => res.json())
+                    .then(user => addOrMoveContact(user))
+                    .catch(err => console.error("Could not fetch user info for new message sender."));
             }
         });
+
         socket.on('status', (message) => {
             const statusElement = document.createElement('div');
             statusElement.classList.add('status-message');
