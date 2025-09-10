@@ -71,10 +71,13 @@
             </div>
         </div>
     </div>
-
-    <script src="/socket.io/socket.io.js"></script>
+<script src="/socket.io/socket.io.js"></script>
     <script>
+        console.log("Profile page script loaded.");
+
         const currentUserId = "<%- currentUser.id %>";
+        console.log("Current User ID:", currentUserId);
+
         let recipientId = null;
         let activeUsersList = [];
         const displayedContacts = new Map();
@@ -121,6 +124,7 @@
                 contactDiv.appendChild(infoDiv);
                 
                 contactDiv.addEventListener('click', () => {
+                    console.log(`Contact ${contact.id} clicked. Setting as recipient.`);
                     document.querySelectorAll('.contact').forEach(c => c.classList.remove('active'));
                     contactDiv.classList.add('active');
 
@@ -136,12 +140,10 @@
                 displayedContacts.set(contact.id, contactDiv);
             }
             
-            // Move contact to the top of the list
             if (contactList.firstChild !== contactDiv) {
                 contactList.prepend(contactDiv);
             }
 
-            // Update status text and dot color
             updateContactStatus(contact.id);
         };
 
@@ -162,9 +164,11 @@
 
         const loadRecentContacts = async () => {
             try {
+                console.log("Fetching recent contacts...");
                 const response = await fetch('/api/recent-contacts');
                 if (!response.ok) throw new Error('Failed to fetch contacts');
                 const contacts = await response.json();
+                console.log("Recent contacts loaded:", contacts);
                 
                 contacts.forEach(contact => {
                     addOrMoveContact(contact);
@@ -194,6 +198,7 @@
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('User not found.');
                 const foundUser = await response.json();
+                console.log("User found:", foundUser);
 
                 addOrMoveContact(foundUser);
                 
@@ -212,8 +217,13 @@
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchUser();
         });
+
+        const isCallLink = (message) => {
+            return message && message.startsWith(`${window.location.origin}/calling?room=`);
+        };
         
-        const displayMessage = (data, isCallLink = false) => {
+        const displayMessage = (data) => {
+            console.log("Displaying message:", data);
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
 
@@ -226,11 +236,14 @@
             const contentDiv = document.createElement('div');
             contentDiv.classList.add('message-content');
 
-            if (isCallLink) {
-                contentDiv.innerHTML = `<div class="call-link-message">
-                    <a href="${data.message}" target="_blank">Join the call</a>
-                </div>`;
-            } else if (data.message.startsWith('data:image/')) {
+            if (isCallLink(data.message)) {
+                const link = document.createElement('a');
+                link.href = data.message;
+                link.target = "_blank";
+                link.textContent = 'Join the call';
+                link.classList.add('call-link-message');
+                contentDiv.appendChild(link);
+            } else if (data.message && data.message.startsWith('data:image/')) {
                  const img = new Image();
                  img.src = data.message;
                  img.classList.add('chat-image');
@@ -247,15 +260,16 @@
         const loadChatHistory = async (id) => {
             messagesContainer.innerHTML = '';
             try {
+                console.log("Loading chat history for recipient:", id);
                 const response = await fetch(`/api/chat-history?recipientId=${id}`);
                 if (!response.ok) throw new Error('Failed to fetch chat history.');
                 const messages = await response.json();
+                console.log("Chat history loaded:", messages);
                 messages.forEach(msg => {
-                    const isCallLink = msg.message_text.startsWith('/start-call/');
                     displayMessage({
                         fromUserId: msg.sender_id,
                         message: msg.message_text
-                    }, isCallLink);
+                    });
                 });
             } catch (err) {
                 const statusElement = document.createElement('div');
@@ -266,15 +280,22 @@
         };
 
         const sendMessage = (message) => {
-            if (recipientId && message) {
-                socket.emit('private-message', { recipientId, message });
-                messageInput.value = '';
+            if (!recipientId) {
+                alert('Please select a contact to send a message to.');
+                console.error("No recipient selected.");
+                return;
             }
+            if (!message.trim()) return;
+
+            console.log("Sending message:", { recipientId, message });
+            socket.emit('private-message', { recipientId, message });
+            messageInput.value = '';
         }
 
         imageUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file && recipientId) {
+                console.log("Uploading image...");
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const base64Image = event.target.result;
@@ -284,24 +305,41 @@
             }
         });
 
+        function generateRoomId() {
+             return Math.random().toString(36).substring(2, 9);
+        }
+
         function sendCallInvite(audioOnly = false) {
             if (!recipientId) {
                 alert('Please select a contact to call.');
                 return;
             }
-            const callLink = `/start-call/${recipientId}?callerId=${currentUserId}&audioOnly=${audioOnly}`;
             
-            window.open(callLink, '_blank', 'width=800,height=600');
+            const roomId = generateRoomId();
+            const callLink = `${window.location.origin}/calling?room=${roomId}&audioOnly=${audioOnly}`;
             
+            console.log("Sending call invite:", callLink);
+            window.open(callLink, '_blank');
             sendMessage(callLink);
         }
 
+        const displayStatusMessage = (message, senderId) => {
+            if (senderId == recipientId) {
+                const statusElement = document.createElement('div');
+                statusElement.classList.add('status-message');
+                statusElement.textContent = message;
+                messagesContainer.appendChild(statusElement);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        };
+
         socket.on('connect', () => {
-            console.log("Connected to server, sending user ID.");
+            console.log("Socket connected.");
             loadRecentContacts();
         });
 
         socket.on('active-users', (users) => {
+            console.log("Active users list received:", users);
             activeUsersList = users;
             displayedContacts.forEach((contactDiv, id) => {
                 updateContactStatus(id);
@@ -309,9 +347,9 @@
         });
 
         socket.on('chat-message', (data) => {
+            console.log("Chat message received:", data);
             if (data.fromUserId == recipientId || data.fromUserId == currentUserId) {
-                const isCallLink = data.message.startsWith('/start-call/');
-                displayMessage(data, isCallLink);
+                displayMessage(data);
             }
             
             if (!displayedContacts.has(data.fromUserId) && data.fromUserId != currentUserId) {
@@ -323,11 +361,21 @@
         });
 
         socket.on('status', (message) => {
+            console.log("Status message received:", message);
             const statusElement = document.createElement('div');
             statusElement.classList.add('status-message');
             statusElement.textContent = message;
             messagesContainer.appendChild(statusElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        });
+
+        socket.on('call-ended-notification', (data) => {
+          console.log("Call ended notification received from user:", data.fromUserId);
+          displayStatusMessage(`Call with ${data.fromUserId} has ended.`, data.fromUserId);
+        });
+
+        socket.on('error', (err) => {
+          console.error("Socket error:", err);
         });
         
         audioCallBtn.addEventListener('click', () => sendCallInvite(true));
@@ -344,5 +392,6 @@
             }
         });
     </script>
+
 </body>
 </html>

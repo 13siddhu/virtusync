@@ -77,65 +77,7 @@
             </div>
         <% } %>
 
-        <section id="room-selection-section" class="flex flex-col items-center justify-center w-full space-y-6 fade-in p-6 bg-gray-800 rounded-2xl shadow-2xl">
-            <h2 class="text-2xl font-semibold text-center mb-4">Choose Room Option</h2>
-            
-            <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="room-option bg-gray-700 p-6 rounded-xl cursor-pointer hover:bg-gray-600" onclick="createRoom()">
-                    <div class="text-center">
-                        <div class="mx-auto bg-blue-500 p-3 rounded-full w-16 h-16 flex items-center justify-center mb-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
-                        </div>
-                        <h3 class="text-xl font-semibold mb-2">Create a Room</h3>
-                        <p class="text-gray-400 text-sm">Generate a new room ID to share with others</p>
-                    </div>
-                </div>
-                
-                <div class="room-option bg-gray-700 p-6 rounded-xl cursor-pointer hover:bg-gray-600" onclick="showJoinRoom()">
-                    <div class="text-center">
-                        <div class="mx-auto bg-green-500 p-3 rounded-full w-16 h-16 flex items-center justify-center mb-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                        </div>
-                        <h3 class="text-xl font-semibold mb-2">Join a Room</h3>
-                        <p class="text-gray-400 text-sm">Enter a room ID to join an existing call</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="flex items-center mt-4">
-                <span id="connection-status" class="status-indicator status-offline"></span>
-                <span id="connection-status-text" class="text-sm text-gray-400">Disconnected</span>
-            </div>
-        </section>
-
-        <section id="join-room-section" class="hidden flex-col items-center justify-center w-full space-y-6 fade-in p-6 bg-gray-800 rounded-2xl shadow-2xl">
-            <h2 class="text-2xl font-semibold text-center mb-4">Join a Room</h2>
-            
-            <div class="w-full flex flex-col sm:flex-row gap-4">
-                <div class="input-group flex-1">
-                    <input type="text" id="joinRoomIdInput" placeholder="Enter Room ID to join" class="w-full px-4 py-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
-                </div>
-                <button id="joinRoomBtn" class="w-full sm:w-auto px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md transition-transform duration-200 hover:scale-105">Join Room</button>
-            </div>
-            
-            <button onclick="showRoomSelection()" class="px-4 py-2 text-gray-400 hover:text-white mt-4 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Back to options
-            </button>
-        </section>
-
-        <section id="call-section" class="hidden w-full mx-auto flex flex-col items-center mt-4">
-            
-            <div id="room-info" class="text-sm text-center text-gray-400 mb-4 w-full p-4 bg-gray-800 rounded-lg">
-                <p>Your Room ID: <span id="roomIdDisplay" class="font-mono text-xs text-blue-400"></span></p>
-                <p class="mt-2">Share this link: <span id="roomLinkDisplay" class="font-mono text-xs text-blue-400 break-all"></span></p>
-            </div>
+        <section id="call-section" class="w-full mx-auto flex flex-col items-center mt-4">
             
             <div id="video-grid" class="w-full grid gap-4 p-4 flex-1 items-center justify-center transition-all duration-300">
                 </div>
@@ -176,12 +118,10 @@
 
     <script>
         const myUserId = "<%= currentUser.id %>";
+        const roomId = "<%= roomId %>";
+        const audioOnly = "<%= audioOnly %>" === "true";
         
-        const roomSelectionSection = document.getElementById('room-selection-section');
-        const joinRoomSection = document.getElementById('join-room-section');
         const callSection = document.getElementById('call-section');
-        const joinRoomIdInput = document.getElementById('joinRoomIdInput');
-        const joinRoomBtn = document.getElementById('joinRoomBtn');
         const endCallBtn = document.getElementById('endCallBtn');
         const toggleMicBtn = document.getElementById('toggleMicBtn');
         const toggleCamBtn = document.getElementById('toggleCamBtn');
@@ -190,36 +130,12 @@
         const modal = document.getElementById('modal');
         const modalMessage = document.getElementById('modal-message');
         const modalCloseBtn = document.getElementById('modal-close-btn');
-        const connectionStatus = document.getElementById('connection-status');
-        const connectionStatusText = document.getElementById('connection-status-text');
-        const roomIdDisplay = document.getElementById('roomIdDisplay');
-        const roomLinkDisplay = document.getElementById('roomLinkDisplay');
 
         let socket = null;
-        let peers = new Map(); // Use a Map to store multiple peer connections
+        let peers = new Map();
         let localStream = null;
-        let roomId = null;
         let isInitiator = false;
         let isScreenSharing = false;
-
-        // --- UI Navigation Functions ---
-        function showRoomSelection() {
-            roomSelectionSection.classList.remove('hidden');
-            joinRoomSection.classList.add('hidden');
-            callSection.classList.add('hidden');
-        }
-
-        function showJoinRoom() {
-            roomSelectionSection.classList.add('hidden');
-            joinRoomSection.classList.remove('hidden');
-            callSection.classList.add('hidden');
-        }
-
-        function showCallSection() {
-            roomSelectionSection.classList.add('hidden');
-            joinRoomSection.classList.add('hidden');
-            callSection.classList.remove('hidden');
-        }
 
         // --- Utility Functions ---
         function showModal(message) {
@@ -231,21 +147,14 @@
             modal.classList.add('hidden');
         }
 
-        function generateRoomId() {
-            return Math.random().toString(36).substring(2, 9);
-        }
-
         function updateVideoGrid() {
-            // Get all current participants (local user + all connected peers)
             const participants = [{ id: myUserId, isLocal: true }];
             for (const [peerId] of peers.entries()) {
                 participants.push({ id: peerId, isLocal: false });
             }
 
-            // Clear the grid first
             videoGrid.innerHTML = '';
             
-            // Add each participant's video
             participants.forEach(p => {
                 const videoWrapper = document.createElement('div');
                 videoWrapper.id = `video-wrapper-${p.id}`;
@@ -269,7 +178,6 @@
                 videoGrid.appendChild(videoWrapper);
             });
 
-            // Adjust grid layout based on the number of current participants
             const count = participants.length;
             let gridColsClass = '';
             if (count === 1) {
@@ -286,8 +194,6 @@
             videoGrid.className = `w-full grid ${gridColsClass} gap-4 p-4 flex-1 items-center justify-center transition-all duration-300`;
         }
 
-
-        // --- WebRTC Setup ---
         const iceServers = {
             'iceServers': [
                 { 'urls': 'stun:stun.l.google.com:19302' },
@@ -299,12 +205,10 @@
             try {
                 const peerConnection = new RTCPeerConnection(iceServers);
 
-                // Add local tracks to the connection
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
                 });
 
-                // Handle incoming tracks from the remote peer
                 peerConnection.ontrack = (event) => {
                     const remoteVideo = document.getElementById(`video-${peerId}`);
                     if (remoteVideo) {
@@ -312,7 +216,6 @@
                     }
                 };
 
-                // Listen for ICE candidates and send them to the peer
                 peerConnection.onicecandidate = (event) => {
                     if (event.candidate) {
                         socket.emit('signal', {
@@ -323,7 +226,6 @@
                     }
                 };
                 
-                // If this is the initiator, create and send an offer
                 if (isInitiatorFlag) {
                     const offer = await peerConnection.createOffer();
                     await peerConnection.setLocalDescription(offer);
@@ -350,7 +252,6 @@
 
             let peerConnection = peers.get(from);
             if (!peerConnection) {
-                // This is the first signal, so create a new peer connection
                 peerConnection = await createPeerConnection(from, false);
             }
 
@@ -369,37 +270,30 @@
                 await peerConnection.addIceCandidate(new RTCIceCandidate(signal));
             }
         }
-
-        async function createRoom() {
-            roomId = generateRoomId();
-            roomIdDisplay.textContent = roomId;
-            roomLinkDisplay.textContent = `${window.location.origin}/directcall?room=${roomId}`;
-            isInitiator = true;
-            await startCall();
-        }
-
-        async function joinRoom(id) {
-            roomId = id;
-            roomIdDisplay.textContent = roomId;
-            roomLinkDisplay.textContent = `${window.location.origin}/directcall?room=${roomId}`;
-            isInitiator = false;
-            await startCall();
-        }
-
+        
         async function startCall() {
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                // Add local video to the grid
+                const constraints = {
+                    video: !audioOnly,
+                    audio: true
+                };
+
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                
                 updateVideoGrid();
                 document.getElementById(`video-${myUserId}`).srcObject = localStream;
 
                 socket.emit('join-room', roomId);
-                
-                showCallSection();
 
             } catch (error) {
                 console.error('Error getting media:', error);
-                showModal('Could not access your camera or microphone. Please check permissions.');
+                let errorMessage = "Could not access your camera or microphone. Please check permissions.";
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = "Access to camera/mic was denied. Please allow it in your browser settings.";
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = "No camera or microphone found on your device.";
+                }
+                showModal(errorMessage);
             }
         }
 
@@ -412,13 +306,11 @@
             }
 
             if (roomId) {
+                socket.emit('call-ended-notification', { roomId: roomId, fromUserId: myUserId });
                 socket.emit('leave-room', roomId);
             }
             
-            showRoomSelection();
-            roomId = null;
-            isInitiator = false;
-            updateVideoGrid();
+            window.close();
         }
 
         async function toggleScreenShare() {
@@ -479,44 +371,31 @@
             });
 
             socket.on('connect', () => {
-                connectionStatus.classList.remove('status-offline');
-                connectionStatus.classList.add('status-online');
-                connectionStatusText.textContent = 'Connected';
+                startCall();
             });
 
             socket.on('disconnect', () => {
-                connectionStatus.classList.remove('status-online');
-                connectionStatus.classList.add('status-offline');
-                connectionStatusText.textContent = 'Disconnected';
                 showModal('Disconnected from server.');
-                endCall();
+                setTimeout(() => window.close(), 3000);
             });
 
             socket.on('user-joined', async (data) => {
-                console.log('User joined:', data.userId);
-                // Create a new peer connection for the new user, and if we are the initiator, send an offer
-                if (isInitiator) {
-                    await createPeerConnection(data.userId, isInitiator);
-                }
+              isInitiator = true;
+              await createPeerConnection(data.userId, isInitiator);
             });
 
             socket.on('signal', (data) => {
-              console.log('Received signal from:', data.from);
               handleSignal(data);
             });
 
             socket.on('user-left', (data) => {
-                console.log('User left:', data.userId);
                 if (peers.has(data.userId)) {
                     peers.get(data.userId).close();
                     peers.delete(data.userId);
                     updateVideoGrid();
-                    showModal('A user has left the call.');
+                    showModal('The other user has left the call.');
+                    endCall();
                 }
-            });
-
-            socket.on('status', (message) => {
-                showModal(message);
             });
         }
 
@@ -525,25 +404,8 @@
         endCallBtn.addEventListener('click', endCall);
         toggleScreenShareBtn.addEventListener('click', toggleScreenShare);
         
-        joinRoomBtn.addEventListener('click', () => {
-            const id = joinRoomIdInput.value.trim();
-            if (id) {
-                joinRoom(id);
-            } else {
-                showModal("Please enter a valid room ID.");
-            }
-        });
-
         window.addEventListener('load', () => {
             initializeSocket();
-            // Check if a room ID is in the URL to auto-join
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomFromUrl = urlParams.get('room');
-            if (roomFromUrl) {
-                joinRoomIdInput.value = roomFromUrl;
-                showModal(`Room ID ${roomFromUrl} detected in URL. Click 'Join Room' to begin.`);
-                showJoinRoom();
-            }
         });
 
     </script>

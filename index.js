@@ -10,6 +10,7 @@ import { Strategy} from "passport-local";
 import pg from "pg";
 import session from "express-session";
 import env from "dotenv";
+import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 const server = createServer(app);
@@ -54,8 +55,12 @@ const db = new pg.Client({
     rejectUnauthorized: false
   }
 });
-db.connect();
+db.connect()
+  .then(() => console.log("Database connected successfully."))
+  .catch(err => console.error("Database connection error:", err));
 
+
+// Maps authenticated user IDs to their Socket.io IDs
 const activeUsers = new Map();
 
 io.on('connection', (socket) => {
@@ -71,97 +76,108 @@ io.on('connection', (socket) => {
   socket.on('private-message', async (data) => {
     const { recipientId, message } = data;
     const senderId = socket.handshake.query.userId;
-    const recipientSocketId = activeUsers.get(String(recipientId));
-    
+    console.log(`Received private message from ${senderId} to ${recipientId}: ${message}`);
+
     if (!senderId || !recipientId || !message) {
       console.error("Invalid message data received.");
       return;
     }
-
+    
     try {
-      const result = await db.query(
-        "INSERT INTO messages (sender_id, recipient_id, message_text) VALUES ($1, $2, $3) RETURNING *",
-        [senderId, recipientId, message]
-      );
-      const savedMessage = result.rows[0];
+        const result = await db.query(
+            "INSERT INTO messages (sender_id, recipient_id, message_text) VALUES ($1, $2, $3) RETURNING *",
+            [senderId, recipientId, message]
+        );
+        const savedMessage = result.rows[0];
+        console.log("Message saved to database:", savedMessage);
 
-      if (recipientSocketId) {
-        io.to(recipientSocketId).emit('chat-message', {
-          id: savedMessage.id,
-          fromUserId: senderId,
-          message: savedMessage.message_text,
-          timestamp: savedMessage.timestamp,
+        const recipientSocketId = activeUsers.get(String(recipientId));
+
+        if (recipientSocketId) {
+            console.log(`Emitting message to recipient ${recipientId} on socket ${recipientSocketId}`);
+            io.to(recipientSocketId).emit('chat-message', {
+                fromUserId: senderId,
+                message: savedMessage.message_text,
+            });
+        } else {
+            console.log(`Recipient ${recipientId} is offline, message not emitted.`);
+        }
+
+        console.log(`Emitting message back to sender ${senderId} on socket ${socket.id}`);
+        io.to(socket.id).emit('chat-message', {
+            fromUserId: senderId,
+            message: savedMessage.message_text,
         });
-      }
-      io.to(socket.id).emit('chat-message', {
-        id: savedMessage.id,
-        fromUserId: senderId,
-        message: savedMessage.message_text,
-        timestamp: savedMessage.timestamp,
-      });
 
     } catch (err) {
-      console.error("Error saving message to database:", err);
-      io.to(socket.id).emit('status', 'Error sending message.');
+        console.error("Error saving message to database:", err);
+        io.to(socket.id).emit('status', 'Error sending message.');
     }
   });
 
-  // -----------------------------------------------------------------------------
-  // ONE-ON-ONE WEBRTC SIGNALING
-  // -----------------------------------------------------------------------------
-  
-  socket.on('offer', (data) => {
-    // Send the offer to the room ID as the recipient
-    const recipientSocketId = activeUsers.get(String(data.recipientId));
-    const fromUserId = socket.handshake.query.userId;
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('offer', {
-        fromUserId: fromUserId,
-        offer: data.offer,
-        recipientId: data.recipientId
-      });
-      console.log(`Offer from ${fromUserId} to room ${data.recipientId}`);
-    } else {
-      io.to(socket.id).emit('status', `User ${data.recipientId} is offline.`);
+  socket.on('call-ended-notification', async (data) => {
+    const { roomId, fromUserId } = data;
+    console.log(`Call ended in room ${roomId} by user ${fromUserId}.`);
+
+    const roomSockets = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+    const otherUserSocketId = roomSockets.find(sId => sId !== socket.id);
+    const otherUserId = Array.from(activeUsers.entries()).find(([uId, sId]) => sId === otherUserSocketId)?.[0];
+
+    if (otherUserId) {
+        const messageText = `Call with ${fromUserId} has ended.`;
+        try {
+            const result = await db.query(
+                "INSERT INTO messages (sender_id, recipient_id, message_text) VALUES ($1, $2, $3) RETURNING *",
+                [fromUserId, otherUserId, messageText]
+            );
+            const savedMessage = result.rows[0];
+            console.log("'Call ended' message saved to database:", savedMessage);
+
+            io.to(otherUserSocketId).emit('chat-message', {
+                fromUserId: fromUserId,
+                message: messageText,
+            });
+        } catch (err) {
+            console.error("Error saving 'call ended' message:", err);
+        }
     }
   });
 
-  socket.on('answer', (data) => {
-    // Send the answer to the caller
-    const recipientSocketId = activeUsers.get(String(data.recipientId));
-    const fromUserId = socket.handshake.query.userId;
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('answer', {
-        fromUserId: fromUserId,
-        answer: data.answer
-      });
-      console.log(`Answer from ${fromUserId} to ${data.recipientId}`);
+  socket.on('join-room', (roomId) => {
+    socket.join(roomId);
+    console.log(`User ${socket.id} joined room: ${roomId}`);
+
+    const roomSockets = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+    console.log(`Users in room ${roomId}:`, roomSockets);
+    
+    if (roomSockets.length > 1) {
+      socket.to(roomId).emit('user-joined', { userId: socket.id });
     }
   });
 
-  socket.on('ice-candidate', (data) => {
-    // Send the ICE candidate to the recipient
-    const recipientSocketId = activeUsers.get(String(data.recipientId));
-    const fromUserId = socket.handshake.query.userId;
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('ice-candidate', {
-        fromUserId: fromUserId,
-        candidate: data.candidate
-      });
-      console.log(`ICE candidate from ${fromUserId} to ${data.recipientId}`);
-    }
+  socket.on('signal', (data) => {
+    socket.to(data.room).emit('signal', {
+      from: socket.id,
+      signal: data.signal
+    });
+    console.log(`Forwarding signal from ${socket.id} in room ${data.room}`);
   });
 
-  socket.on('end-call', (data) => {
-    // End the call for the other person in the room
-    const recipientSocketId = activeUsers.get(String(data.recipientId));
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('end-call');
-    }
+  socket.on('leave-room', (roomId) => {
+    socket.leave(roomId);
+    console.log(`User ${socket.id} left room ${roomId}`);
+    socket.to(roomId).emit('user-left', { userId: socket.id });
   });
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
+    for (const [roomId, roomSet] of Object.entries(io.sockets.adapter.rooms)) {
+      if (roomSet.has(socket.id)) {
+        socket.to(roomId).emit('user-left', { userId: socket.id });
+        console.log(`User ${socket.id} removed from room ${roomId}`);
+        break;
+      }
+    }
     for (let [id, sId] of activeUsers.entries()) {
       if (sId === socket.id) {
         activeUsers.delete(id);
@@ -177,9 +193,40 @@ app.get("/", (req, res) => {
   res.render("index.ejs");
 });
 
-app.get("/directcall", (req, res) => {
-    const roomId = req.query.room || null; // Get room ID or set to null
-    res.render("directcall.ejs", { roomId: roomId, currentUser: req.user });
+app.get('/directcall', (req, res) => {
+  let currentUser = req.user;
+  let isTempUser = false;
+  if (!currentUser) {
+    currentUser = { id: uuidv4(), email: 'Guest' };
+    isTempUser = true;
+  }
+  
+  res.render("directcall.ejs", {
+    currentUser,
+    isTempUser
+  });
+});
+
+app.get('/calling', (req, res) => {
+    let currentUser = req.user;
+    let isTempUser = false;
+    if (!currentUser) {
+        currentUser = { id: uuidv4(), email: 'Guest' };
+        isTempUser = true;
+    }
+    const roomId = req.query.room || null;
+    const audioOnly = req.query.audioOnly === 'true';
+
+    if (!roomId) {
+        return res.status(400).send("Room ID is required to join a call.");
+    }
+    
+    res.render("calling.ejs", {
+        currentUser,
+        isTempUser,
+        roomId,
+        audioOnly
+    });
 });
 
 app.get("/login", (req, res) => {
@@ -267,25 +314,6 @@ app.get("/api/chat-history", async (req, res) => {
     console.error("Error fetching chat history:", err);
     res.status(500).send("Internal Server Error");
   }
-});
-
-app.get("/start-call/:recipientId", (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.redirect("/login");
-    }
-    const { recipientId } = req.params;
-    const { audioOnly, callerId } = req.query; 
-    
-    if (!recipientId || !callerId) {
-        return res.status(400).send("Recipient ID and Caller ID are required.");
-    }
-    
-    res.render("DirectCall.ejs", {
-        recipientId,
-        callerId,
-        audioOnly: audioOnly === 'true',
-        currentUser: req.user
-    });
 });
 
 app.get("/profile", (req, res) => {
