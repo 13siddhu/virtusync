@@ -45,16 +45,14 @@ app.use(function(req, res, next) {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// --- UPDATED DATABASE CLIENT CREATION FOR VERCEL ---
 const db = new pg.Client({
-  user: process.env.PG_USER,
-  host: process.env.PG_HOST,
-  database: process.env.PG_DATABASE,
-  password: process.env.PG_PASSWORD,
-  port: process.env.PG_PORT,
+  connectionString: process.env.DB_URL || `postgres://${process.env.PG_USER}:${process.env.PG_PASSWORD}@${process.env.PG_HOST}:${process.env.PG_PORT}/${process.env.PG_DATABASE}`,
   ssl: {
     rejectUnauthorized: false
   }
 });
+
 db.connect()
   .then(() => console.log("Database connected successfully."))
   .catch(err => console.error("Database connection error:", err));
@@ -257,7 +255,7 @@ app.get("/api/search-user", async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("Error searching user:", err);
+    console.error("Error searching user in database:", err);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -402,6 +400,6 @@ passport.deserializeUser((user, cb) => {
   cb(null, user);
 });
 
-server.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+server.listen(process.env.PORT || port, () => {
+  console.log(`Server running on port ${process.env.PORT || port}`);
 });

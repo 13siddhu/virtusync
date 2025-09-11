@@ -71,13 +71,10 @@
             </div>
         </div>
     </div>
-<script src="/socket.io/socket.io.js"></script>
+
+    <script src="/socket.io/socket.io.js"></script>
     <script>
-        console.log("Profile page script loaded.");
-
         const currentUserId = "<%- currentUser.id %>";
-        console.log("Current User ID:", currentUserId);
-
         let recipientId = null;
         let activeUsersList = [];
         const displayedContacts = new Map();
@@ -124,7 +121,6 @@
                 contactDiv.appendChild(infoDiv);
                 
                 contactDiv.addEventListener('click', () => {
-                    console.log(`Contact ${contact.id} clicked. Setting as recipient.`);
                     document.querySelectorAll('.contact').forEach(c => c.classList.remove('active'));
                     contactDiv.classList.add('active');
 
@@ -164,11 +160,9 @@
 
         const loadRecentContacts = async () => {
             try {
-                console.log("Fetching recent contacts...");
                 const response = await fetch('/api/recent-contacts');
                 if (!response.ok) throw new Error('Failed to fetch contacts');
                 const contacts = await response.json();
-                console.log("Recent contacts loaded:", contacts);
                 
                 contacts.forEach(contact => {
                     addOrMoveContact(contact);
@@ -196,10 +190,13 @@
 
             try {
                 const response = await fetch(url);
-                if (!response.ok) throw new Error('User not found.');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Search API Error:", response.status, errorText);
+                    throw new Error('User not found.');
+                }
                 const foundUser = await response.json();
-                console.log("User found:", foundUser);
-
+                
                 addOrMoveContact(foundUser);
                 
                 const contactToActivate = displayedContacts.get(foundUser.id);
@@ -223,7 +220,6 @@
         };
         
         const displayMessage = (data) => {
-            console.log("Displaying message:", data);
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
 
@@ -260,11 +256,9 @@
         const loadChatHistory = async (id) => {
             messagesContainer.innerHTML = '';
             try {
-                console.log("Loading chat history for recipient:", id);
                 const response = await fetch(`/api/chat-history?recipientId=${id}`);
                 if (!response.ok) throw new Error('Failed to fetch chat history.');
                 const messages = await response.json();
-                console.log("Chat history loaded:", messages);
                 messages.forEach(msg => {
                     displayMessage({
                         fromUserId: msg.sender_id,
@@ -282,12 +276,10 @@
         const sendMessage = (message) => {
             if (!recipientId) {
                 alert('Please select a contact to send a message to.');
-                console.error("No recipient selected.");
                 return;
             }
             if (!message.trim()) return;
 
-            console.log("Sending message:", { recipientId, message });
             socket.emit('private-message', { recipientId, message });
             messageInput.value = '';
         }
@@ -295,7 +287,6 @@
         imageUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file && recipientId) {
-                console.log("Uploading image...");
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const base64Image = event.target.result;
@@ -318,7 +309,6 @@
             const roomId = generateRoomId();
             const callLink = `${window.location.origin}/calling?room=${roomId}&audioOnly=${audioOnly}`;
             
-            console.log("Sending call invite:", callLink);
             window.open(callLink, '_blank');
             sendMessage(callLink);
         }
@@ -334,12 +324,10 @@
         };
 
         socket.on('connect', () => {
-            console.log("Socket connected.");
             loadRecentContacts();
         });
 
         socket.on('active-users', (users) => {
-            console.log("Active users list received:", users);
             activeUsersList = users;
             displayedContacts.forEach((contactDiv, id) => {
                 updateContactStatus(id);
@@ -347,7 +335,6 @@
         });
 
         socket.on('chat-message', (data) => {
-            console.log("Chat message received:", data);
             if (data.fromUserId == recipientId || data.fromUserId == currentUserId) {
                 displayMessage(data);
             }
@@ -361,7 +348,6 @@
         });
 
         socket.on('status', (message) => {
-            console.log("Status message received:", message);
             const statusElement = document.createElement('div');
             statusElement.classList.add('status-message');
             statusElement.textContent = message;
@@ -370,7 +356,6 @@
         });
 
         socket.on('call-ended-notification', (data) => {
-          console.log("Call ended notification received from user:", data.fromUserId);
           displayStatusMessage(`Call with ${data.fromUserId} has ended.`, data.fromUserId);
         });
 
@@ -392,6 +377,5 @@
             }
         });
     </script>
-
 </body>
 </html>
