@@ -25,12 +25,18 @@ const __dirname = path.dirname(__filename);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
+// --- UPDATED SESSION MIDDLEWARE CONFIGURATION ---
 app.use(
   session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: true,
-})
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: true,
+    proxy: true, // This is crucial for Vercel
+    cookie: {
+      secure: true, // This ensures cookies are only sent over HTTPS
+      maxAge: 1000 * 60 * 60 * 24 // 24 hours
+    }
+  })
 );
 
 app.use(passport.initialize());
@@ -45,7 +51,6 @@ app.use(function(req, res, next) {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// --- UPDATED DATABASE CLIENT CREATION FOR VERCEL ---
 const db = new pg.Client({
   connectionString: process.env.DB_URL || `postgres://${process.env.PG_USER}:${process.env.PG_PASSWORD}@${process.env.PG_HOST}:${process.env.PG_PORT}/${process.env.PG_DATABASE}`,
   ssl: {
@@ -58,7 +63,6 @@ db.connect()
   .catch(err => console.error("Database connection error:", err));
 
 
-// Maps authenticated user IDs to their Socket.io IDs
 const activeUsers = new Map();
 
 io.on('connection', (socket) => {
