@@ -235,42 +235,43 @@
             return Math.random().toString(36).substring(2, 9);
         }
 
-        function updateVideoGrid() {
-            // Get all current participants (local user + all connected peers)
-            const participants = [{ id: myUserId, isLocal: true }];
-            for (const [peerId] of peers.entries()) {
-                participants.push({ id: peerId, isLocal: false });
-            }
+        function addVideoElement(id, isLocal = false) {
+            const existingWrapper = document.getElementById(`video-wrapper-${id}`);
+            if (existingWrapper) return existingWrapper.querySelector('video');
 
-            // Clear the grid first
-            videoGrid.innerHTML = '';
+            const videoWrapper = document.createElement('div');
+            videoWrapper.id = `video-wrapper-${id}`;
+            videoWrapper.className = 'video-wrapper w-full aspect-video bg-gray-700 rounded-xl overflow-hidden shadow-xl transition-transform duration-300 hover:scale-[1.01] fade-in relative';
             
-            // Add each participant's video
-            participants.forEach(p => {
-                const videoWrapper = document.createElement('div');
-                videoWrapper.id = `video-wrapper-${p.id}`;
-                videoWrapper.className = 'video-wrapper w-full aspect-video bg-gray-700 rounded-xl overflow-hidden shadow-xl transition-transform duration-300 hover:scale-[1.01] fade-in relative';
-                
-                const video = document.createElement('video');
-                video.id = `video-${p.id}`;
-                video.className = 'video-feed';
-                video.autoplay = true;
-                video.playsInline = true;
-                if (p.isLocal) {
-                    video.muted = true;
-                }
-                
-                const label = document.createElement('div');
-                label.className = 'absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full z-10';
-                label.textContent = p.isLocal ? 'You' : p.id;
+            const video = document.createElement('video');
+            video.id = `video-${id}`;
+            video.className = 'video-feed';
+            video.autoplay = true;
+            video.playsInline = true;
+            if (isLocal) {
+                video.muted = true;
+            }
+            
+            const label = document.createElement('div');
+            label.className = 'absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full z-10';
+            label.textContent = isLocal ? 'You' : `User: ${id}`;
 
-                videoWrapper.appendChild(video);
-                videoWrapper.appendChild(label);
-                videoGrid.appendChild(videoWrapper);
-            });
+            videoWrapper.appendChild(video);
+            videoWrapper.appendChild(label);
+            videoGrid.appendChild(videoWrapper);
 
-            // Adjust grid layout based on the number of current participants
-            const count = participants.length;
+            return video;
+        }
+
+        function removeVideoElement(id) {
+            const videoWrapper = document.getElementById(`video-wrapper-${id}`);
+            if (videoWrapper) {
+                videoWrapper.remove();
+            }
+        }
+
+        function updateGridLayout() {
+            const count = videoGrid.children.length;
             let gridColsClass = '';
             if (count === 1) {
                 gridColsClass = 'grid-cols-1';
@@ -299,20 +300,18 @@
             try {
                 const peerConnection = new RTCPeerConnection(iceServers);
 
-                // Add local tracks to the connection
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
                 });
 
-                // Handle incoming tracks from the remote peer
                 peerConnection.ontrack = (event) => {
-                    const remoteVideo = document.getElementById(`video-${peerId}`);
+                    const remoteVideo = addVideoElement(peerId);
                     if (remoteVideo) {
                         remoteVideo.srcObject = event.streams[0];
                     }
+                    updateGridLayout();
                 };
 
-                // Listen for ICE candidates and send them to the peer
                 peerConnection.onicecandidate = (event) => {
                     if (event.candidate) {
                         socket.emit('signal', {
@@ -323,7 +322,6 @@
                     }
                 };
                 
-                // If this is the initiator, create and send an offer
                 if (isInitiatorFlag) {
                     const offer = await peerConnection.createOffer();
                     await peerConnection.setLocalDescription(offer);
@@ -335,7 +333,6 @@
                 }
                 
                 peers.set(peerId, peerConnection);
-                updateVideoGrid();
                 return peerConnection;
 
             } catch (error) {
@@ -350,7 +347,6 @@
 
             let peerConnection = peers.get(from);
             if (!peerConnection) {
-                // This is the first signal, so create a new peer connection
                 peerConnection = await createPeerConnection(from, false);
             }
 
@@ -389,10 +385,10 @@
         async function startCall() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                // Add local video to the grid
-                updateVideoGrid();
-                document.getElementById(`video-${myUserId}`).srcObject = localStream;
-
+                
+                addVideoElement(myUserId, true).srcObject = localStream;
+                updateGridLayout();
+                
                 socket.emit('join-room', roomId);
                 
                 showCallSection();
@@ -418,7 +414,7 @@
             showRoomSelection();
             roomId = null;
             isInitiator = false;
-            updateVideoGrid();
+            videoGrid.innerHTML = ''; // Clear video grid completely
         }
 
         async function toggleScreenShare() {
@@ -472,7 +468,6 @@
             }
         }
         
-        // --- Socket.io Handlers ---
         function initializeSocket() {
             socket = io('http://localhost:3000', {
                 query: { userId: myUserId }
@@ -494,15 +489,14 @@
 
             socket.on('user-joined', async (data) => {
                 console.log('User joined:', data.userId);
-                // Create a new peer connection for the new user, and if we are the initiator, send an offer
                 if (isInitiator) {
                     await createPeerConnection(data.userId, isInitiator);
                 }
             });
 
             socket.on('signal', (data) => {
-              console.log('Received signal from:', data.from);
-              handleSignal(data);
+                console.log('Received signal from:', data.from);
+                handleSignal(data);
             });
 
             socket.on('user-left', (data) => {
@@ -510,7 +504,8 @@
                 if (peers.has(data.userId)) {
                     peers.get(data.userId).close();
                     peers.delete(data.userId);
-                    updateVideoGrid();
+                    removeVideoElement(data.userId);
+                    updateGridLayout();
                     showModal('A user has left the call.');
                 }
             });
