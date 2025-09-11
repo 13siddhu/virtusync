@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VirtuSync - WebRTC & Socket.io</title>
+    <title>VirtuSync</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
@@ -347,6 +347,7 @@
 
             let peerConnection = peers.get(from);
             if (!peerConnection) {
+                // This is the first signal, so create a new peer connection
                 peerConnection = await createPeerConnection(from, false);
             }
 
@@ -468,8 +469,10 @@
             }
         }
         
+        // --- Socket.io Handlers ---
         function initializeSocket() {
-            socket = io('http://localhost:3000', {
+            // Use io() with no arguments to connect to the same host that served the page
+            socket = io({
                 query: { userId: myUserId }
             });
 
@@ -495,8 +498,8 @@
             });
 
             socket.on('signal', (data) => {
-                console.log('Received signal from:', data.from);
-                handleSignal(data);
+              console.log('Received signal from:', data.from);
+              handleSignal(data);
             });
 
             socket.on('user-left', (data) => {
