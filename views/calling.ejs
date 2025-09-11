@@ -66,7 +66,6 @@
 
     <header class="w-full max-w-4xl mx-auto p-4 text-center z-20">
         <h1 class="text-4xl md:text-5xl font-extrabold text-blue-400 drop-shadow-lg tracking-wide">VirtuSync</h1>
-        <p class="text-gray-400 mt-2 text-sm md:text-base">WebRTC peer-to-peer video calls</p>
     </header>
 
     <main id="main-content" class="flex flex-1 flex-col items-center justify-center w-full max-w-4xl py-4">
@@ -96,7 +95,7 @@
                 <button id="toggleScreenShareBtn" class="bg-gray-700 text-gray-300 p-3 rounded-full hover:bg-blue-500 transition-colors duration-200 shadow-lg">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 12a2.25 2.25 0 110-4.5 2.25 2.25 0 010 4.5z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.25 9.75v.001M12 21.75l-.946-.583a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 00-1.025-2.613l-1.928-.575a1.5 1.5 0 01-1.554-.608L3.25 12l.583-.946a1.5 1.5 0 011.554-.608l1.928.575a2.25 2.25 0 002.613-1.025l.575-1.928a1.5 1.5 0 01.608-1.554l.946-.583 1.25.772a.75.75 0 00.957-1.235l-.772-1.25a1.5 1.5 0 01.608-1.554l1.928-.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-1.25-.772a1.5 1.5 0 011.554-.608l1.928.575a1.5 1.5 0 01.608 1.554l-.575 1.928a2.25 2.25 0 001.025 2.613l1.928.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-.772-1.25a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 001.025-2.613l-1.928-.575a1.5 1.5 0 01-1.554-.608L12 3.25l-.946-.583a1.5 1.5 0 00-1.554.608l-1.928-.575a1.5 1.5 0 00-1.554.608L3.25 12z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.25 9.75v.001M12 21.75l-.946-.583a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 00-1.025-2.613l-1.928-.575a1.5 1.5 0 01-1.554-.608L3.25 12l.583-.946a1.5 1.5 0 011.554-.608l1.928.575a2.25 2.25 0 002.613-1.025l.575-1.928a1.5 1.5 0 01.608-1.554l.946-.583 1.25.772a.75.75 0 00.957-1.235l-.772-1.25a1.5 1.5 0 01.608-1.554l1.928-.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-1.25-.772a1.5 1.5 0 011.554-.608l1.928.575a1.5 1.5 0 01.608 1.554l-.575 1.928a2.25 2.25 0 001.025 2.613l1.928.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-.772-1.25a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 001.025-2.613l-1-1.928-.575a1.5 1.5 0 01-1.554-.608L12 3.25l-.946-.583a1.5 1.5 0 00-1.554.608l-1.928-.575a1.5 1.5 0 00-1.554.608L3.25 12z" />
                     </svg>
                 </button>
                 <button id="endCallBtn" class="bg-red-600 text-white font-bold p-3 sm:px-6 sm:py-3 rounded-full hover:bg-red-700 transition-transform duration-200 hover:scale-105 shadow-lg">
@@ -147,38 +146,43 @@
             modal.classList.add('hidden');
         }
 
-        function updateVideoGrid() {
-            const participants = [{ id: myUserId, isLocal: true }];
-            for (const [peerId] of peers.entries()) {
-                participants.push({ id: peerId, isLocal: false });
-            }
+        function addVideoElement(id, isLocal = false) {
+            const existingWrapper = document.getElementById(`video-wrapper-${id}`);
+            if (existingWrapper) return existingWrapper.querySelector('video');
 
-            videoGrid.innerHTML = '';
+            const videoWrapper = document.createElement('div');
+            videoWrapper.id = `video-wrapper-${id}`;
+            videoWrapper.className = 'video-wrapper w-full aspect-video bg-gray-700 rounded-xl overflow-hidden shadow-xl transition-transform duration-300 hover:scale-[1.01] fade-in relative';
             
-            participants.forEach(p => {
-                const videoWrapper = document.createElement('div');
-                videoWrapper.id = `video-wrapper-${p.id}`;
-                videoWrapper.className = 'video-wrapper w-full aspect-video bg-gray-700 rounded-xl overflow-hidden shadow-xl transition-transform duration-300 hover:scale-[1.01] fade-in relative';
-                
-                const video = document.createElement('video');
-                video.id = `video-${p.id}`;
-                video.className = 'video-feed';
-                video.autoplay = true;
-                video.playsInline = true;
-                if (p.isLocal) {
-                    video.muted = true;
-                }
-                
-                const label = document.createElement('div');
-                label.className = 'absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full z-10';
-                label.textContent = p.isLocal ? 'You' : p.id;
+            const video = document.createElement('video');
+            video.id = `video-${id}`;
+            video.className = 'video-feed';
+            video.autoplay = true;
+            video.playsInline = true;
+            if (isLocal) {
+                video.muted = true;
+            }
+            
+            const label = document.createElement('div');
+            label.className = 'absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full z-10';
+            label.textContent = isLocal ? 'You' : `User: ${id}`;
 
-                videoWrapper.appendChild(video);
-                videoWrapper.appendChild(label);
-                videoGrid.appendChild(videoWrapper);
-            });
+            videoWrapper.appendChild(video);
+            videoWrapper.appendChild(label);
+            videoGrid.appendChild(videoWrapper);
 
-            const count = participants.length;
+            return video;
+        }
+
+        function removeVideoElement(id) {
+            const videoWrapper = document.getElementById(`video-wrapper-${id}`);
+            if (videoWrapper) {
+                videoWrapper.remove();
+            }
+        }
+
+        function updateGridLayout() {
+            const count = videoGrid.children.length;
             let gridColsClass = '';
             if (count === 1) {
                 gridColsClass = 'grid-cols-1';
@@ -237,7 +241,6 @@
                 }
                 
                 peers.set(peerId, peerConnection);
-                updateVideoGrid();
                 return peerConnection;
 
             } catch (error) {
@@ -280,9 +283,9 @@
 
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                updateVideoGrid();
-                document.getElementById(`video-${myUserId}`).srcObject = localStream;
-
+                addVideoElement(myUserId, true).srcObject = localStream;
+                updateGridLayout();
+                
                 socket.emit('join-room', roomId);
 
             } catch (error) {
@@ -366,7 +369,7 @@
         
         // --- Socket.io Handlers ---
         function initializeSocket() {
-            socket = io('http://localhost:3000', {
+            socket = io({
                 query: { userId: myUserId }
             });
 
@@ -378,8 +381,19 @@
                 showModal('Disconnected from server.');
                 setTimeout(() => window.close(), 3000);
             });
+            
+            socket.on('room-users', async (users) => {
+              console.log('Existing users in room:', users);
+              if (users.length > 0) {
+                isInitiator = true;
+                for (const userId of users) {
+                  await createPeerConnection(userId, isInitiator);
+                }
+              }
+            });
 
             socket.on('user-joined', async (data) => {
+              console.log('New user joined:', data.userId);
               isInitiator = true;
               await createPeerConnection(data.userId, isInitiator);
             });
@@ -392,9 +406,12 @@
                 if (peers.has(data.userId)) {
                     peers.get(data.userId).close();
                     peers.delete(data.userId);
-                    updateVideoGrid();
+                    removeVideoElement(data.userId);
+                    updateGridLayout();
                     showModal('The other user has left the call.');
-                    endCall();
+                    if (peers.size === 0) {
+                      endCall();
+                    }
                 }
             });
         }

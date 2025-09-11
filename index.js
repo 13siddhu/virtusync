@@ -11,6 +11,7 @@ import pg from "pg";
 import session from "express-session";
 import env from "dotenv";
 import { v4 as uuidv4 } from 'uuid';
+import connectPgSimple from 'connect-pg-simple';
 
 const app = express();
 const server = createServer(app);
@@ -25,16 +26,36 @@ const __dirname = path.dirname(__filename);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-// --- UPDATED SESSION MIDDLEWARE CONFIGURATION ---
+const db = new pg.Pool({
+  connectionString: process.env.DB_URL || `postgres://${process.env.PG_USER}:${process.env.PG_PASSWORD}@${process.env.PG_HOST}:${process.env.PG_PORT}/${process.env.PG_DATABASE}`,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+db.connect()
+  .then(() => console.log("Database pool connected successfully."))
+  .catch(err => console.error("Database connection error:", err));
+
+const PgStore = connectPgSimple(session);
+
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use(
   session({
+    store: new PgStore({
+      pool: db,
+      createTableIfMissing: true,
+    }),
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
-    proxy: true, // This is crucial for Vercel
+    proxy: isProduction,
     cookie: {
-      secure: true, // This ensures cookies are only sent over HTTPS
-      maxAge: 1000 * 60 * 60 * 24 // 24 hours
+      name: 'my-session',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 1000 * 60 * 60 * 24
     }
   })
 );
@@ -50,18 +71,6 @@ app.use(function(req, res, next) {
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-
-const db = new pg.Client({
-  connectionString: process.env.DB_URL || `postgres://${process.env.PG_USER}:${process.env.PG_PASSWORD}@${process.env.PG_HOST}:${process.env.PG_PORT}/${process.env.PG_DATABASE}`,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
-
-db.connect()
-  .then(() => console.log("Database connected successfully."))
-  .catch(err => console.error("Database connection error:", err));
-
 
 const activeUsers = new Map();
 
@@ -150,19 +159,28 @@ io.on('connection', (socket) => {
     console.log(`User ${socket.id} joined room: ${roomId}`);
 
     const roomSockets = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
-    console.log(`Users in room ${roomId}:`, roomSockets);
     
     if (roomSockets.length > 1) {
       socket.to(roomId).emit('user-joined', { userId: socket.id });
     }
-  });
 
+    const existingUsers = roomSockets.filter(sId => sId !== socket.id);
+    socket.emit('room-users', existingUsers);
+
+    console.log(`Users in room ${roomId}:`, roomSockets);
+  });
+  
   socket.on('signal', (data) => {
-    socket.to(data.room).emit('signal', {
-      from: socket.id,
-      signal: data.signal
-    });
-    console.log(`Forwarding signal from ${socket.id} in room ${data.room}`);
+    const recipientSocketId = activeUsers.get(data.to);
+    if (recipientSocketId) {
+      console.log(`Forwarding signal from ${socket.id} to ${data.to}`);
+      io.to(recipientSocketId).emit('signal', {
+        from: socket.id,
+        signal: data.signal
+      });
+    } else {
+      console.log(`Recipient ${data.to} not found in activeUsers map.`);
+    }
   });
 
   socket.on('leave-room', (roomId) => {
@@ -370,38 +388,55 @@ app.post("/register", async (req, res) => {
 
 passport.use(
   new Strategy(async function verify(username, password, cb) {
+    console.log("Verifying user:", username);
     try {
       const result = await db.query("SELECT * from users WHERE email = $1", [username]);
       if (result.rows.length > 0) {
         const user = result.rows[0];
         const storeHashedPassword = user.password;
+        console.log("User found. Comparing passwords...");
         bcrypt.compare(password, storeHashedPassword, (err, valid) => {
           if (err) {
             console.error("Error comparing password", err);
             return cb(err);
           } else {
             if (valid) {
+              console.log("Password is valid. Login successful.");
               return cb(null, user);
             } else {
+              console.log("Invalid password.");
               return cb(null, false, { message: 'Incorrect password.' });
             }
           }
         });
       } else {
+        console.log("User not found.");
         return cb(null, false, { message: 'User not found.' });
       }
     } catch (err) {
-      console.log(err);
+      console.error("Error during passport verification:", err);
+      return cb(err);
     }
   })
 );
 
 passport.serializeUser((user, cb) => {
+  console.log("Serializing user:", user.id);
   cb(null, user);
 });
 
 passport.deserializeUser((user, cb) => {
-  cb(null, user);
+  console.log("Deserializing user:", user.id);
+  const userQuery = 'SELECT * FROM users WHERE id = $1';
+  db.query(userQuery, [user.id])
+    .then(result => {
+      const foundUser = result.rows[0];
+      cb(null, foundUser);
+    })
+    .catch(err => {
+      console.error("Error deserializing user:", err);
+      cb(err, null);
+    });
 });
 
 server.listen(process.env.PORT || port, () => {
