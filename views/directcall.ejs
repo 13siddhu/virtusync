@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VirtuSync</title>
+    <title>VirtuSync - WebRTC & Socket.io</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
@@ -66,6 +66,7 @@
 
     <header class="w-full max-w-4xl mx-auto p-4 text-center z-20">
         <h1 class="text-4xl md:text-5xl font-extrabold text-blue-400 drop-shadow-lg tracking-wide">VirtuSync</h1>
+        <p class="text-gray-400 mt-2 text-sm md:text-base">WebRTC peer-to-peer video calls</p>
     </header>
 
     <main id="main-content" class="flex flex-1 flex-col items-center justify-center w-full max-w-4xl py-4">
@@ -153,7 +154,7 @@
                 <button id="toggleScreenShareBtn" class="bg-gray-700 text-gray-300 p-3 rounded-full hover:bg-blue-500 transition-colors duration-200 shadow-lg">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 12a2.25 2.25 0 110-4.5 2.25 2.25 0 010 4.5z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.25 9.75v.001M12 21.75l-.946-.583a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 00-1.025-2.613l-1.928-.575a1.5 1.5 0 01-1.554-.608L3.25 12l.583-.946a1.5 1.5 0 011.554-.608l1.928.575a2.25 2.25 0 002.613-1.025l.575-1.928a1.5 1.5 0 01.608-1.554l.946-.583 1.25.772a.75.75 0 00.957-1.235l-.772-1.25a1.5 1.5 0 01.608-1.554l1.928-.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-1.25-.772a1.5 1.5 0 011.554-.608l1.928.575a1.5 1.5 0 01.608 1.554l-.575 1.928a2.25 2.25 0 001.025 2.613l1.928.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-.772-1.25a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 001.025-2.613l-1.928-.575a1.5 1.5 0 01-1.554-.608L12 3.25l-.946-.583a1.5 1.5 0 00-1.554.608l-1.928-.575a1.5 1.5 0 00-1.554.608L3.25 12z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.25 9.75v.001M12 21.75l-.946-.583a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 00-1.025-2.613l-1.928-.575a1.5 1.5 0 01-1.554-.608L3.25 12l.583-.946a1.5 1.5 0 011.554-.608l1.928.575a2.25 2.25 0 002.613-1.025l.575-1.928a1.5 1.5 0 01.608-1.554l.946-.583 1.25.772a.75.75 0 00.957-1.235l-.772-1.25a1.5 1.5 0 01.608-1.554l1.928-.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-1.25-.772a1.5 1.5 0 011.554-.608l1.928.575a1.5 1.5 0 01.608 1.554l-.575 1.928a2.25 2.25 0 001.025 2.613l1.928.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-.772-1.25a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 001.025-2.613l-1-1.928-.575a1.5 1.5 0 01-1.554-.608L12 3.25l-.946-.583a1.5 1.5 0 00-1.554.608l-1.928-.575a1.5 1.5 0 00-1.554.608L3.25 12z" />
                     </svg>
                 </button>
                 <button id="endCallBtn" class="bg-red-600 text-white font-bold p-3 sm:px-6 sm:py-3 rounded-full hover:bg-red-700 transition-transform duration-200 hover:scale-105 shadow-lg">
@@ -175,12 +176,10 @@
 
     <script>
         const myUserId = "<%= currentUser.id %>";
+        const roomId = "<%= roomId %>";
+        const audioOnly = "<%= audioOnly %>" === "true";
         
-        const roomSelectionSection = document.getElementById('room-selection-section');
-        const joinRoomSection = document.getElementById('join-room-section');
         const callSection = document.getElementById('call-section');
-        const joinRoomIdInput = document.getElementById('joinRoomIdInput');
-        const joinRoomBtn = document.getElementById('joinRoomBtn');
         const endCallBtn = document.getElementById('endCallBtn');
         const toggleMicBtn = document.getElementById('toggleMicBtn');
         const toggleCamBtn = document.getElementById('toggleCamBtn');
@@ -189,36 +188,12 @@
         const modal = document.getElementById('modal');
         const modalMessage = document.getElementById('modal-message');
         const modalCloseBtn = document.getElementById('modal-close-btn');
-        const connectionStatus = document.getElementById('connection-status');
-        const connectionStatusText = document.getElementById('connection-status-text');
-        const roomIdDisplay = document.getElementById('roomIdDisplay');
-        const roomLinkDisplay = document.getElementById('roomLinkDisplay');
 
         let socket = null;
-        let peers = new Map(); // Use a Map to store multiple peer connections
+        let peers = new Map();
         let localStream = null;
-        let roomId = null;
         let isInitiator = false;
         let isScreenSharing = false;
-
-        // --- UI Navigation Functions ---
-        function showRoomSelection() {
-            roomSelectionSection.classList.remove('hidden');
-            joinRoomSection.classList.add('hidden');
-            callSection.classList.add('hidden');
-        }
-
-        function showJoinRoom() {
-            roomSelectionSection.classList.add('hidden');
-            joinRoomSection.classList.remove('hidden');
-            callSection.classList.add('hidden');
-        }
-
-        function showCallSection() {
-            roomSelectionSection.classList.add('hidden');
-            joinRoomSection.classList.add('hidden');
-            callSection.classList.remove('hidden');
-        }
 
         // --- Utility Functions ---
         function showModal(message) {
@@ -228,10 +203,6 @@
 
         function hideModal() {
             modal.classList.add('hidden');
-        }
-
-        function generateRoomId() {
-            return Math.random().toString(36).substring(2, 9);
         }
 
         function addVideoElement(id, isLocal = false) {
@@ -286,8 +257,6 @@
             videoGrid.className = `w-full grid ${gridColsClass} gap-4 p-4 flex-1 items-center justify-center transition-all duration-300`;
         }
 
-
-        // --- WebRTC Setup ---
         const iceServers = {
             'iceServers': [
                 { 'urls': 'stun:stun.l.google.com:19302' },
@@ -346,7 +315,6 @@
 
             let peerConnection = peers.get(from);
             if (!peerConnection) {
-                // This is the first signal, so create a new peer connection
                 peerConnection = await createPeerConnection(from, false);
             }
 
@@ -365,37 +333,30 @@
                 await peerConnection.addIceCandidate(new RTCIceCandidate(signal));
             }
         }
-
-        async function createRoom() {
-            roomId = generateRoomId();
-            roomIdDisplay.textContent = roomId;
-            roomLinkDisplay.textContent = `${window.location.origin}/directcall?room=${roomId}`;
-            isInitiator = true;
-            await startCall();
-        }
-
-        async function joinRoom(id) {
-            roomId = id;
-            roomIdDisplay.textContent = roomId;
-            roomLinkDisplay.textContent = `${window.location.origin}/directcall?room=${roomId}`;
-            isInitiator = false;
-            await startCall();
-        }
-
+        
         async function startCall() {
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const constraints = {
+                    video: !audioOnly,
+                    audio: true
+                };
+
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 
                 addVideoElement(myUserId, true).srcObject = localStream;
                 updateGridLayout();
                 
                 socket.emit('join-room', roomId);
-                
-                showCallSection();
 
             } catch (error) {
                 console.error('Error getting media:', error);
-                showModal('Could not access your camera or microphone. Please check permissions.');
+                let errorMessage = "Could not access your camera or microphone. Please check permissions.";
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = "Access to camera/mic was denied. Please allow it in your browser settings.";
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = "No camera or microphone found on your device.";
+                }
+                showModal(errorMessage);
             }
         }
 
@@ -408,13 +369,11 @@
             }
 
             if (roomId) {
+                socket.emit('call-ended-notification', { roomId: roomId, fromUserId: myUserId });
                 socket.emit('leave-room', roomId);
             }
             
-            showRoomSelection();
-            roomId = null;
-            isInitiator = false;
-            videoGrid.innerHTML = ''; // Clear video grid completely
+            window.close();
         }
 
         async function toggleScreenShare() {
@@ -470,50 +429,50 @@
         
         // --- Socket.io Handlers ---
         function initializeSocket() {
-            // Use io() with no arguments to connect to the same host that served the page
             socket = io({
                 query: { userId: myUserId }
             });
 
             socket.on('connect', () => {
-                connectionStatus.classList.remove('status-offline');
-                connectionStatus.classList.add('status-online');
-                connectionStatusText.textContent = 'Connected';
+                startCall();
             });
 
             socket.on('disconnect', () => {
-                connectionStatus.classList.remove('status-online');
-                connectionStatus.classList.add('status-offline');
-                connectionStatusText.textContent = 'Disconnected';
                 showModal('Disconnected from server.');
-                endCall();
+                setTimeout(() => window.close(), 3000);
+            });
+
+            socket.on('room-users', async (users) => {
+              console.log('Existing users in room:', users);
+              if (users.length > 0) {
+                isInitiator = true;
+                for (const userId of users) {
+                  await createPeerConnection(userId, isInitiator);
+                }
+              }
             });
 
             socket.on('user-joined', async (data) => {
-                console.log('User joined:', data.userId);
-                if (isInitiator) {
-                    await createPeerConnection(data.userId, isInitiator);
-                }
+              console.log('New user joined:', data.userId);
+              isInitiator = true;
+              await createPeerConnection(data.userId, isInitiator);
             });
 
             socket.on('signal', (data) => {
-              console.log('Received signal from:', data.from);
               handleSignal(data);
             });
 
             socket.on('user-left', (data) => {
-                console.log('User left:', data.userId);
                 if (peers.has(data.userId)) {
                     peers.get(data.userId).close();
                     peers.delete(data.userId);
                     removeVideoElement(data.userId);
                     updateGridLayout();
-                    showModal('A user has left the call.');
+                    showModal('The other user has left the call.');
+                    if (peers.size === 0) {
+                      endCall();
+                    }
                 }
-            });
-
-            socket.on('status', (message) => {
-                showModal(message);
             });
         }
 
@@ -522,25 +481,8 @@
         endCallBtn.addEventListener('click', endCall);
         toggleScreenShareBtn.addEventListener('click', toggleScreenShare);
         
-        joinRoomBtn.addEventListener('click', () => {
-            const id = joinRoomIdInput.value.trim();
-            if (id) {
-                joinRoom(id);
-            } else {
-                showModal("Please enter a valid room ID.");
-            }
-        });
-
         window.addEventListener('load', () => {
             initializeSocket();
-            // Check if a room ID is in the URL to auto-join
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomFromUrl = urlParams.get('room');
-            if (roomFromUrl) {
-                joinRoomIdInput.value = roomFromUrl;
-                showModal(`Room ID ${roomFromUrl} detected in URL. Click 'Join Room' to begin.`);
-                showJoinRoom();
-            }
         });
 
     </script>

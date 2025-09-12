@@ -16,6 +16,7 @@ import connectPgSimple from 'connect-pg-simple';
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
+  pingTimeout: 30000, // 30 seconds
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
@@ -80,31 +81,8 @@ app.set('views', path.join(__dirname, 'views'));
 const activeUsers = new Map();
 
 io.on('connection', (socket) => {
-  console.log(`User connected with ID: ${socket.id}`);
+  console.log('A user connected:', socket.id);
   
-  socket.on('connect_error', (err) => {
-    console.error(`Socket.io connection error for user ${socket.id}:`, err.message);
-  });
-  
-  socket.on('disconnect', (reason) => {
-    console.log(`User ${socket.id} disconnected. Reason: ${reason}`);
-    for (let [id, sId] of activeUsers.entries()) {
-      if (sId === socket.id) {
-        activeUsers.delete(id);
-        console.log(`User ${id} removed from active users.`);
-        io.emit('active-users', Array.from(activeUsers.keys()));
-        break;
-      }
-    }
-    for (const [roomId, roomSet] of Object.entries(io.sockets.adapter.rooms)) {
-      if (roomSet.has(socket.id)) {
-        socket.to(roomId).emit('user-left', { userId: socket.id });
-        console.log(`User ${socket.id} removed from room ${roomId}`);
-        break;
-      }
-    }
-  });
-
   const userId = socket.handshake.query.userId;
   if (userId) {
     activeUsers.set(String(userId), socket.id);
@@ -215,6 +193,25 @@ io.on('connection', (socket) => {
     socket.leave(roomId);
     console.log(`User ${socket.id} left room ${roomId}`);
     socket.to(roomId).emit('user-left', { userId: socket.id });
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`User disconnected. Reason: ${reason}`);
+    for (let [id, sId] of activeUsers.entries()) {
+      if (sId === socket.id) {
+        activeUsers.delete(id);
+        console.log(`User ${id} removed from active users.`);
+        io.emit('active-users', Array.from(activeUsers.keys()));
+        break;
+      }
+    }
+    for (const [roomId, roomSet] of Object.entries(io.sockets.adapter.rooms)) {
+      if (roomSet.has(socket.id)) {
+        socket.to(roomId).emit('user-left', { userId: socket.id });
+        console.log(`User ${socket.id} removed from room ${roomId}`);
+        break;
+      }
+    }
   });
 });
 

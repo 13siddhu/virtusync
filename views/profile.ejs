@@ -78,7 +78,12 @@
         let recipientId = null;
         let activeUsersList = [];
         const displayedContacts = new Map();
-        const socket = io({ query: { userId: currentUserId } });
+        
+        // --- Updated Socket.io connection for Vercel ---
+        const socket = io({
+          pingTimeout: 30000,
+          query: { userId: currentUserId }
+        });
 
         const messagesContainer = document.getElementById('messages-container');
         const contactList = document.getElementById('contact-list');
