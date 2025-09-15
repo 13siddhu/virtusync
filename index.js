@@ -33,7 +33,7 @@ app.use(
     saveUninitialized: true,
     proxy: true, // This is crucial for Vercel
     cookie: {
-      secure: true, // This ensures cookies are only sent over HTTPS
+      secure: false, // This ensures cookies are only sent over HTTPS
       maxAge: 1000 * 60 * 60 * 24 // 24 hours
     }
   })

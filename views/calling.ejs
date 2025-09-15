@@ -1,413 +1,261 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VirtuSync - WebRTC & Socket.io</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            transition: background-color 0.3s ease;
-        }
-        .video-feed {
-            object-fit: cover;
-            width: 100%;
-            height: 100%;
-            border-radius: 1rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .fade-in {
-            animation: fadeIn 0.5s ease-in-out forwards;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .input-group {
-            position: relative;
-        }
-        .status-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-        .status-online {
-            background-color: #10B981;
-        }
-        .status-offline {
-            background-color: #EF4444;
-        }
-        .status-connecting {
-            background-color: #F59E0B;
-        }
-        .pulse {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { transform: scale(0.95); opacity: 0.7; }
-            50% { transform: scale(1); opacity: 1; }
-            100% { transform: scale(0.95); opacity: 0.7; }
-        }
-        .room-option {
-            transition: all 0.3s ease;
-        }
-        .room-option:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VirtuSync - WebRTC & Socket.io</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #111827;
+      color: #e5e7eb;
+    }
+    .video-feed {
+      object-fit: cover;
+      width: 100%;
+      height: 100%;
+      border-radius: 1rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+  </style>
 </head>
-<body class="bg-gray-900 text-gray-200 antialiased min-h-screen flex flex-col items-center justify-center p-4">
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
 
-    <header class="w-full max-w-4xl mx-auto p-4 text-center z-20">
-        <h1 class="text-4xl md:text-5xl font-extrabold text-blue-400 drop-shadow-lg tracking-wide">VirtuSync</h1>
-        <p class="text-gray-400 mt-2 text-sm md:text-base">WebRTC peer-to-peer video calls</p>
-    </header>
+  <header class="w-full max-w-4xl mx-auto p-4 text-center z-20">
+    <h1 class="text-4xl md:text-5xl font-extrabold text-blue-400">VirtuSync</h1>
+  </header>
 
-    <main id="main-content" class="flex flex-1 flex-col items-center justify-center w-full max-w-4xl py-4">
-        
-        <% if (isTempUser) { %>
-            <div id="temp-user-alert" class="w-full max-w-lg mb-6 p-4 bg-yellow-900 border border-yellow-700 rounded-lg shadow-lg text-sm text-yellow-200">
-                You are currently using a temporary ID: <span class="font-bold"><%= currentUser.id %></span>. For persistent access and features, please <a href="/login" class="underline text-yellow-400 hover:text-yellow-100">log in or register</a>.
-            </div>
-        <% } %>
+  <main id="main-content" class="flex flex-1 flex-col items-center justify-center w-full max-w-4xl py-4">
+    <section id="call-section" class="w-full mx-auto flex flex-col items-center mt-4">
+      <div id="video-grid" class="w-full grid gap-4 p-4 flex-1 items-center justify-center transition-all duration-300"></div>
+      <div id="controls" class="flex items-center justify-center p-4 gap-4 bg-gray-800 rounded-full shadow-lg mt-4">
+        <button id="toggleMicBtn" class="bg-green-500 text-white font-bold px-4 py-3 rounded-full hover:bg-green-600">🎤</button>
+        <button id="toggleCamBtn" class="bg-green-500 text-white font-bold px-4 py-3 rounded-full hover:bg-green-600">📷</button>
+        <button id="toggleScreenShareBtn" class="bg-gray-700 text-white font-bold px-4 py-3 rounded-full hover:bg-blue-500">🖥️</button>
+        <button id="endCallBtn" class="bg-red-600 text-white font-bold px-6 py-3 rounded-full hover:bg-red-700">End Call</button>
+      </div>
+    </section>
+  </main>
 
-        <section id="call-section" class="w-full mx-auto flex flex-col items-center mt-4">
-            
-            <div id="video-grid" class="w-full grid gap-4 p-4 flex-1 items-center justify-center transition-all duration-300">
-                </div>
-            
-            <div id="controls" class="flex flex-wrap items-center justify-center p-4 gap-4 bg-gray-800 rounded-full shadow-lg z-20 mt-4">
-                <button id="toggleMicBtn" class="bg-green-500 text-gray-900 p-3 rounded-full hover:bg-gray-600 transition-colors duration-200 shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                </button>
-                <button id="toggleCamBtn" class="bg-green-500 text-gray-900 p-3 rounded-full hover:bg-gray-600 transition-colors duration-200 shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                </button>
-                <button id="toggleScreenShareBtn" class="bg-gray-700 text-gray-300 p-3 rounded-full hover:bg-blue-500 transition-colors duration-200 shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 12a2.25 2.25 0 110-4.5 2.25 2.25 0 010 4.5z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.25 9.75v.001M12 21.75l-.946-.583a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 00-1.025-2.613l-1.928-.575a1.5 1.5 0 01-1.554-.608L3.25 12l.583-.946a1.5 1.5 0 011.554-.608l1.928.575a2.25 2.25 0 002.613-1.025l.575-1.928a1.5 1.5 0 01.608-1.554l.946-.583 1.25.772a.75.75 0 00.957-1.235l-.772-1.25a1.5 1.5 0 01.608-1.554l1.928-.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-1.25-.772a1.5 1.5 0 011.554-.608l1.928.575a1.5 1.5 0 01.608 1.554l-.575 1.928a2.25 2.25 0 001.025 2.613l1.928.575a1.5 1.5 0 011.554.608l.583.946a.75.75 0 001.235-.957l-.772-1.25a1.5 1.5 0 01-.608-1.554l.575-1.928a2.25 2.25 0 001.025-2.613l-1.928-.575a1.5 1.5 0 01-1.554-.608L12 3.25l-.946-.583a1.5 1.5 0 00-1.554.608l-1.928-.575a1.5 1.5 0 00-1.554.608L3.25 12z" />
-                    </svg>
-                </button>
-                <button id="endCallBtn" class="bg-red-600 text-white font-bold p-3 sm:px-6 sm:py-3 rounded-full hover:bg-red-700 transition-transform duration-200 hover:scale-105 shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                </button>
-            </div>
-        </section>
-        
-        <div id="modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center p-4">
-            <div class="bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
-                <p id="modal-message" class="text-gray-300 text-lg mb-4"></p>
-                <button id="modal-close-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">OK</button>
-            </div>
-        </div>
+  <script>
+    const myUserId = "<%= currentUser.id %>";
+    const roomId = "<%= roomId %>";
+    const audioOnly = "<%= audioOnly %>" === "true";
 
-    </main>
+    const videoGrid = document.getElementById('video-grid');
+    const endCallBtn = document.getElementById('endCallBtn');
+    const toggleMicBtn = document.getElementById('toggleMicBtn');
+    const toggleCamBtn = document.getElementById('toggleCamBtn');
+    const toggleScreenShareBtn = document.getElementById('toggleScreenShareBtn');
 
-    <script>
-        const myUserId = "<%= currentUser.id %>";
-        const roomId = "<%= roomId %>";
-        const audioOnly = "<%= audioOnly %>" === "true";
-        
-        const callSection = document.getElementById('call-section');
-        const endCallBtn = document.getElementById('endCallBtn');
-        const toggleMicBtn = document.getElementById('toggleMicBtn');
-        const toggleCamBtn = document.getElementById('toggleCamBtn');
-        const toggleScreenShareBtn = document.getElementById('toggleScreenShareBtn');
-        const videoGrid = document.getElementById('video-grid');
-        const modal = document.getElementById('modal');
-        const modalMessage = document.getElementById('modal-message');
-        const modalCloseBtn = document.getElementById('modal-close-btn');
+    let socket = null;
+    let peers = new Map();
+    let localStream = null;
+    let isScreenSharing = false;
 
-        let socket = null;
-        let peers = new Map();
-        let localStream = null;
-        let isInitiator = false;
-        let isScreenSharing = false;
+    function updateVideoGrid() {
+      const participants = [{ id: myUserId, isLocal: true }];
+      for (const [peerId] of peers.entries()) {
+        participants.push({ id: peerId, isLocal: false });
+      }
 
-        // --- Utility Functions ---
-        function showModal(message) {
-            modalMessage.textContent = message;
-            modal.classList.remove('hidden');
+      videoGrid.innerHTML = '';
+      participants.forEach(p => {
+        const videoWrapper = document.createElement('div');
+        videoWrapper.id = `video-wrapper-${p.id}`;
+        videoWrapper.className =
+          'video-wrapper w-full aspect-video bg-gray-700 rounded-xl overflow-hidden shadow-xl relative';
+
+        const video = document.createElement('video');
+        video.id = `video-${p.id}`;
+        video.className = 'video-feed';
+        video.autoplay = true;
+        video.playsInline = true;
+        if (p.isLocal) {
+          video.muted = true;
+          if (localStream) video.srcObject = localStream;
         }
 
-        function hideModal() {
-            modal.classList.add('hidden');
+        const label = document.createElement('div');
+        label.className =
+          'absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full z-10';
+        label.textContent = p.isLocal ? 'You' : p.id;
+
+        videoWrapper.appendChild(video);
+        videoWrapper.appendChild(label);
+        videoGrid.appendChild(videoWrapper);
+      });
+    }
+
+    const iceServers = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ]
+    };
+
+    async function createPeerConnection(peerId, isInitiatorFlag) {
+      const peerConnection = new RTCPeerConnection(iceServers);
+
+      localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+      });
+
+      peerConnection.ontrack = (event) => {
+        const remoteVideo = document.getElementById(`video-${peerId}`);
+        if (remoteVideo) {
+          remoteVideo.srcObject = event.streams[0];
         }
+      };
 
-        function updateVideoGrid() {
-            const participants = [{ id: myUserId, isLocal: true }];
-            for (const [peerId] of peers.entries()) {
-                participants.push({ id: peerId, isLocal: false });
-            }
-
-            videoGrid.innerHTML = '';
-            
-            participants.forEach(p => {
-                const videoWrapper = document.createElement('div');
-                videoWrapper.id = `video-wrapper-${p.id}`;
-                videoWrapper.className = 'video-wrapper w-full aspect-video bg-gray-700 rounded-xl overflow-hidden shadow-xl transition-transform duration-300 hover:scale-[1.01] fade-in relative';
-                
-                const video = document.createElement('video');
-                video.id = `video-${p.id}`;
-                video.className = 'video-feed';
-                video.autoplay = true;
-                video.playsInline = true;
-                if (p.isLocal) {
-                    video.muted = true;
-                }
-                
-                const label = document.createElement('div');
-                label.className = 'absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full z-10';
-                label.textContent = p.isLocal ? 'You' : p.id;
-
-                videoWrapper.appendChild(video);
-                videoWrapper.appendChild(label);
-                videoGrid.appendChild(videoWrapper);
-            });
-
-            const count = participants.length;
-            let gridColsClass = '';
-            if (count === 1) {
-                gridColsClass = 'grid-cols-1';
-            } else if (count === 2) {
-                gridColsClass = 'grid-cols-1 md:grid-cols-2';
-            } else if (count <= 4) {
-                gridColsClass = 'grid-cols-2';
-            } else if (count <= 6) {
-                gridColsClass = 'grid-cols-2 md:grid-cols-3';
-            } else {
-                gridColsClass = 'grid-cols-3 md:grid-cols-4';
-            }
-            videoGrid.className = `w-full grid ${gridColsClass} gap-4 p-4 flex-1 items-center justify-center transition-all duration-300`;
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('signal', {
+            room: roomId,
+            to: peerId,
+            signal: event.candidate
+          });
         }
+      };
 
-        const iceServers = {
-            'iceServers': [
-                { 'urls': 'stun:stun.l.google.com:19302' },
-                { 'urls': 'stun:stun1.l.google.com:19302' },
-            ]
-        };
+      peers.set(peerId, peerConnection);
+      updateVideoGrid();
 
-        async function createPeerConnection(peerId, isInitiatorFlag) {
-            try {
-                const peerConnection = new RTCPeerConnection(iceServers);
+      if (isInitiatorFlag) {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit('signal', {
+          room: roomId,
+          to: peerId,
+          signal: offer
+        });
+      }
 
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
+      return peerConnection;
+    }
 
-                peerConnection.ontrack = (event) => {
-                    const remoteVideo = document.getElementById(`video-${peerId}`);
-                    if (remoteVideo) {
-                        remoteVideo.srcObject = event.streams[0];
-                    }
-                };
+    async function handleSignal(data) {
+      const { from, signal } = data;
+      let peerConnection = peers.get(from);
+      if (!peerConnection) {
+        peerConnection = await createPeerConnection(from, false);
+      }
+      if (signal.type === 'offer') {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit('signal', { room: roomId, to: from, signal: answer });
+      } else if (signal.type === 'answer') {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
+      } else if (signal.candidate) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(signal));
+      }
+    }
 
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        socket.emit('signal', {
-                            room: roomId,
-                            to: peerId,
-                            signal: event.candidate
-                        });
-                    }
-                };
-                
-                if (isInitiatorFlag) {
-                    const offer = await peerConnection.createOffer();
-                    await peerConnection.setLocalDescription(offer);
-                    socket.emit('signal', {
-                        room: roomId,
-                        to: peerId,
-                        signal: offer
-                    });
-                }
-                
-                peers.set(peerId, peerConnection);
-                updateVideoGrid();
-                return peerConnection;
-
-            } catch (error) {
-                console.error('Error creating peer connection:', error);
-                showModal('Could not establish connection. Please check your media permissions.');
-                return null;
-            }
-        }
-
-        async function handleSignal(data) {
-            const { from, signal } = data;
-
-            let peerConnection = peers.get(from);
-            if (!peerConnection) {
-                peerConnection = await createPeerConnection(from, false);
-            }
-
-            if (signal.type === 'offer') {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                socket.emit('signal', {
-                    room: roomId,
-                    to: from,
-                    signal: answer
-                });
-            } else if (signal.type === 'answer') {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
-            } else if (signal.candidate) {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(signal));
-            }
-        }
-        
-        async function startCall() {
-            try {
-                const constraints = {
-                    video: !audioOnly,
-                    audio: true
-                };
-
-                localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                updateVideoGrid();
-                document.getElementById(`video-${myUserId}`).srcObject = localStream;
-
-                socket.emit('join-room', roomId);
-
-            } catch (error) {
-                console.error('Error getting media:', error);
-                let errorMessage = "Could not access your camera or microphone. Please check permissions.";
-                if (error.name === 'NotAllowedError') {
-                    errorMessage = "Access to camera/mic was denied. Please allow it in your browser settings.";
-                } else if (error.name === 'NotFoundError') {
-                    errorMessage = "No camera or microphone found on your device.";
-                }
-                showModal(errorMessage);
-            }
-        }
-
-        function endCall() {
-            peers.forEach(peer => peer.close());
-            peers.clear();
-
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-
-            if (roomId) {
-                socket.emit('call-ended-notification', { roomId: roomId, fromUserId: myUserId });
-                socket.emit('leave-room', roomId);
-            }
-            
-            window.close();
-        }
-
-        async function toggleScreenShare() {
-            if (!localStream) {
-                showModal("Please start a call first.");
-                return;
-            }
-
-            try {
-                let newStream;
-                if (isScreenSharing) {
-                    newStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    isScreenSharing = false;
-                    toggleScreenShareBtn.classList.remove('bg-blue-500');
-                    toggleScreenShareBtn.classList.add('bg-gray-700');
-                } else {
-                    newStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                    isScreenSharing = true;
-                    toggleScreenShareBtn.classList.remove('bg-gray-700');
-                    toggleScreenShareBtn.classList.add('bg-blue-500');
-                    
-                    newStream.getVideoTracks()[0].onended = () => {
-                        if (isScreenSharing) {
-                            toggleScreenShare();
-                        }
-                    };
-                }
-
-                const oldVideoTrack = localStream.getVideoTracks()[0];
-                const newVideoTrack = newStream.getVideoTracks()[0];
-                
-                peers.forEach(peer => {
-                    const videoSender = peer.getSenders().find(sender => sender.track && sender.track.kind === 'video');
-                    if (videoSender) {
-                        videoSender.replaceTrack(newVideoTrack);
-                    }
-                });
-
-                oldVideoTrack.stop();
-                localStream = newStream;
-                document.getElementById(`video-${myUserId}`).srcObject = localStream;
-
-            } catch (error) {
-                console.error('Error toggling screen share:', error);
-                showModal("Could not start screen sharing. Please check permissions or try again.");
-                if (isScreenSharing) {
-                    isScreenSharing = false;
-                    toggleScreenShareBtn.classList.remove('bg-blue-500');
-                    toggleScreenShareBtn.classList.add('bg-gray-700');
-                }
-            }
-        }
-        
-        // --- Socket.io Handlers ---
-        function initializeSocket() {
-            socket = io('http://localhost:3000', {
-                query: { userId: myUserId }
-            });
-
-            socket.on('connect', () => {
-                startCall();
-            });
-
-            socket.on('disconnect', () => {
-                showModal('Disconnected from server.');
-                setTimeout(() => window.close(), 3000);
-            });
-
-            socket.on('user-joined', async (data) => {
-              isInitiator = true;
-              await createPeerConnection(data.userId, isInitiator);
-            });
-
-            socket.on('signal', (data) => {
-              handleSignal(data);
-            });
-
-            socket.on('user-left', (data) => {
-                if (peers.has(data.userId)) {
-                    peers.get(data.userId).close();
-                    peers.delete(data.userId);
-                    updateVideoGrid();
-                    showModal('The other user has left the call.');
-                    endCall();
-                }
-            });
-        }
-
-        // --- Event Listeners ---
-        modalCloseBtn.addEventListener('click', hideModal);
-        endCallBtn.addEventListener('click', endCall);
-        toggleScreenShareBtn.addEventListener('click', toggleScreenShare);
-        
-        window.addEventListener('load', () => {
-            initializeSocket();
+    async function startCall() {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: !audioOnly,
+          audio: true
         });
 
-    </script>
+        updateVideoGrid();
+        const localVideo = document.getElementById(`video-${myUserId}`);
+        if (localVideo) {
+          localVideo.srcObject = localStream;
+          await localVideo.play().catch(() => {});
+        }
+
+        socket.emit('join-room', roomId);
+      } catch (err) {
+        console.error('Error accessing media devices:', err);
+        alert("Camera/Microphone access denied or not available.");
+      }
+    }
+
+    function endCall() {
+      peers.forEach(peer => peer.close());
+      peers.clear();
+      if (localStream) localStream.getTracks().forEach(track => track.stop());
+      socket.emit('leave-room', roomId);
+      window.close();
+    }
+
+    async function toggleScreenShare() {
+      try {
+        if (!isScreenSharing) {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          const screenTrack = screenStream.getVideoTracks()[0];
+
+          peers.forEach(peer => {
+            const sender = peer.getSenders().find(s => s.track.kind === 'video');
+            if (sender) sender.replaceTrack(screenTrack);
+          });
+
+          screenTrack.onended = () => toggleScreenShare(); // revert on stop
+          isScreenSharing = true;
+          toggleScreenShareBtn.classList.add('bg-blue-500');
+        } else {
+          const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          const camTrack = camStream.getVideoTracks()[0];
+
+          peers.forEach(peer => {
+            const sender = peer.getSenders().find(s => s.track.kind === 'video');
+            if (sender) sender.replaceTrack(camTrack);
+          });
+
+          localStream.removeTrack(localStream.getVideoTracks()[0]);
+          localStream.addTrack(camTrack);
+          document.getElementById(`video-${myUserId}`).srcObject = localStream;
+
+          isScreenSharing = false;
+          toggleScreenShareBtn.classList.remove('bg-blue-500');
+        }
+      } catch (err) {
+        console.error("Screen share error:", err);
+      }
+    }
+
+    // --- Event Listeners ---
+    toggleMicBtn.addEventListener('click', () => {
+      const audioTrack = localStream.getAudioTracks()[0];
+      audioTrack.enabled = !audioTrack.enabled;
+      toggleMicBtn.classList.toggle('bg-red-500', !audioTrack.enabled);
+      toggleMicBtn.classList.toggle('bg-green-500', audioTrack.enabled);
+    });
+
+    toggleCamBtn.addEventListener('click', () => {
+      const videoTrack = localStream.getVideoTracks()[0];
+      videoTrack.enabled = !videoTrack.enabled;
+      toggleCamBtn.classList.toggle('bg-red-500', !videoTrack.enabled);
+      toggleCamBtn.classList.toggle('bg-green-500', videoTrack.enabled);
+    });
+
+    toggleScreenShareBtn.addEventListener('click', toggleScreenShare);
+    endCallBtn.addEventListener('click', endCall);
+
+    function initializeSocket() {
+      socket = io('http://localhost:3000', { query: { userId: myUserId } });
+      socket.on('connect', () => startCall());
+      socket.on('user-joined', async (data) => {
+        if (!peers.has(data.userId)) {
+          await createPeerConnection(data.userId, true);
+        }
+      });
+      socket.on('signal', (data) => handleSignal(data));
+      socket.on('user-left', (data) => {
+        if (peers.has(data.userId)) {
+          peers.get(data.userId).close();
+          peers.delete(data.userId);
+          updateVideoGrid();
+        }
+      });
+    }
+
+    window.addEventListener('load', () => initializeSocket());
+  </script>
 </body>
 </html>
