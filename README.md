@@ -10,7 +10,7 @@ Enhanced User Experience: Focuses on improving chatting functionality for a bett
 You can view a live version of the project here: https://virtusync-1.onrender.com/
 
 # 🛠️ Technologies Used
-**Languages**: JavaScript
+**Languages**: JavaScript,SQL
 **Backend**: Node.js, Express.js
 **Database**: PostgreSQL
 **Real-time Communication**: Socket.io, WebRTC
