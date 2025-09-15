@@ -90,14 +90,24 @@
       });
     }
 
-    const iceServers = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ]
-    };
+    // --- Fetch ICE config from backend (important for Render) ---
+    async function getIceServers() {
+      try {
+        const res = await fetch(window.location.origin + '/ice-config');
+        return await res.json();
+      } catch (err) {
+        console.warn('Falling back to default STUN');
+        return {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        };
+      }
+    }
 
     async function createPeerConnection(peerId, isInitiatorFlag) {
+      const iceServers = await getIceServers();
       const peerConnection = new RTCPeerConnection(iceServers);
 
       localStream.getTracks().forEach(track => {
@@ -181,6 +191,7 @@
       peers.clear();
       if (localStream) localStream.getTracks().forEach(track => track.stop());
       socket.emit('leave-room', roomId);
+      socket.emit('call-ended-notification', { roomId, fromUserId: myUserId });
       window.close();
     }
 
@@ -219,7 +230,7 @@
       }
     }
 
-    // --- Event Listeners ---
+    // --- UI controls ---
     toggleMicBtn.addEventListener('click', () => {
       const audioTrack = localStream.getAudioTracks()[0];
       audioTrack.enabled = !audioTrack.enabled;
@@ -238,7 +249,8 @@
     endCallBtn.addEventListener('click', endCall);
 
     function initializeSocket() {
-      socket = io('http://localhost:3000', { query: { userId: myUserId } });
+      // 🔑 FIX: Use Render origin instead of localhost
+      socket = io(window.location.origin, { query: { userId: myUserId } });
       socket.on('connect', () => startCall());
       socket.on('user-joined', async (data) => {
         if (!peers.has(data.userId)) {
