@@ -6,7 +6,7 @@ VirtuSync is a real-time video conferencing and chat application built using Nod
 
 ### 🚀 Live Demo
 
-https://virtusync.onrender.com/  
+https://virtusync.onrender.com/
 
 ---
 
